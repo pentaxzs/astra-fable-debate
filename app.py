@@ -18,12 +18,96 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    .block-container {max-width: 1180px; padding-top: 2rem; padding-bottom: 3rem;}
+    .block-container {max-width: 900px; padding-top: 2rem; padding-bottom: 3rem;}
     .small-note {color:#777; font-size:0.9rem;}
+
+    .debate-card {
+        border-radius: 12px;
+        padding: 1.4rem 1.6rem;
+        margin-bottom: 1rem;
+        line-height: 1.7;
+        font-size: 0.95rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+    .debate-card h1, .debate-card h2, .debate-card h3,
+    .debate-card h4, .debate-card h5, .debate-card h6 {
+        margin-top: 0.8rem; margin-bottom: 0.4rem;
+    }
+    .debate-card p { margin-bottom: 0.6rem; }
+
+    .card-astra {
+        background: linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%);
+        border-left: 5px solid #43a047;
+        margin-right: 3rem;
+    }
+    .card-fable {
+        background: linear-gradient(135deg, #ede7f6 0%, #e8eaf6 100%);
+        border-right: 5px solid #5e35b1;
+        border-left: none;
+        margin-left: 3rem;
+    }
+
+    .badge {
+        display: inline-block;
+        padding: 0.2rem 0.7rem;
+        border-radius: 20px;
+        font-weight: 700;
+        font-size: 0.8rem;
+        margin-bottom: 0.6rem;
+        letter-spacing: 0.02em;
+    }
+    .badge-astra { background: #43a047; color: #fff; }
+    .badge-fable { background: #5e35b1; color: #fff; }
+
+    .round-divider {
+        text-align: center;
+        margin: 2.5rem 0 1.5rem 0;
+        position: relative;
+    }
+    .round-divider::before {
+        content: "";
+        position: absolute;
+        top: 50%;
+        left: 0; right: 0;
+        border-top: 2px dashed #bbb;
+    }
+    .round-divider span {
+        background: #fff;
+        padding: 0.3rem 1.2rem;
+        font-weight: 700;
+        font-size: 1rem;
+        color: #555;
+        position: relative;
+        border-radius: 20px;
+        border: 2px solid #bbb;
+    }
+
+    .arrow-down {
+        text-align: center;
+        font-size: 1.4rem;
+        color: #999;
+        margin: 0.4rem 0;
+    }
     </style>
     """,
     unsafe_allow_html=True,
 )
+
+
+
+def render_debate_card_html(model: str, side: str, content_html: str):
+    """Render a full debate card with content as raw HTML."""
+    if side == "astra":
+        badge_cls, card_cls = "badge-astra", "card-astra"
+    else:
+        badge_cls, card_cls = "badge-fable", "card-fable"
+    st.markdown(
+        f'<div class="debate-card {card_cls}">'
+        f'<span class="badge {badge_cls}">{model}</span>'
+        f"{content_html}"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
 
 
 DEFAULT_TOPIC = """AI 시대에는 프로덕트 디자이너보다
@@ -282,19 +366,33 @@ if start:
 
         st.success(f"토론이 완료되었습니다. (총 {num_rounds}라운드, API 호출 {num_rounds * 2}회)")
 
-        tab_names = [f"ROUND {r} · {ROUND_LABELS[r]}" for r in range(1, num_rounds + 1)]
-        tabs = st.tabs(tab_names)
+        astra_display = astra_model.strip()
+        fable_display = fable_model.strip()
 
-        for i, tab in enumerate(tabs):
-            r = i + 1
-            with tab:
-                c1, c2 = st.columns(2)
-                with c1:
-                    st.subheader("GPT-6 Astra" + (" · 최종" if r == 3 else ""))
-                    st.markdown(results[f"astra_{r}"])
-                with c2:
-                    st.subheader("Claude Fable 5" + (" · 최종" if r == 3 else ""))
-                    st.markdown(results[f"fable_{r}"])
+        for r in range(1, num_rounds + 1):
+            label = ROUND_LABELS[r]
+            icon = {1: "\u2694\ufe0f", 2: "\U0001f50d", 3: "\U0001f3c6"}.get(r, "")
+            st.markdown(
+                f'<div class="round-divider"><span>{icon} ROUND {r} &mdash; {label}</span></div>',
+                unsafe_allow_html=True,
+            )
+
+            # Astra speaks
+            render_debate_card_html(
+                f"{astra_display} ({pro_label.strip() or '찬성 측'})",
+                "astra",
+                results[f"astra_{r}"].replace("\n", "<br>"),
+            )
+
+            # Arrow indicating response
+            st.markdown('<div class="arrow-down">\u2b07\ufe0f</div>', unsafe_allow_html=True)
+
+            # Fable responds
+            render_debate_card_html(
+                f"{fable_display} ({con_label.strip() or '반대 측'})",
+                "fable",
+                results[f"fable_{r}"].replace("\n", "<br>"),
+            )
 
         transcript = build_transcript(topic.strip(), pro_label, con_label, results, num_rounds)
         st.download_button(
