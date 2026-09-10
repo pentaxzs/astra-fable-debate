@@ -3,10 +3,16 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
+import markdown
 import streamlit as st
 from streamlit_js_eval import streamlit_js_eval
 from openai import OpenAI
 from anthropic import Anthropic
+
+
+def md_to_html(text: str) -> str:
+    """Convert markdown text to HTML."""
+    return markdown.markdown(text, extensions=["tables", "fenced_code"])
 
 
 st.set_page_config(
@@ -114,12 +120,15 @@ st.markdown(
 
 
 
-def render_debate_card_html(model: str, side: str, content_html: str):
-    """Render a full debate card with content as raw HTML."""
-    if side == "astra":
-        badge_cls, card_cls = "badge-astra", "card-astra"
-    else:
-        badge_cls, card_cls = "badge-fable", "card-fable"
+def render_debate_card_html(model: str, side: str, content_md: str):
+    """Render a full debate card, converting markdown content to HTML."""
+    badge_map = {
+        "astra": ("badge-astra", "card-astra"),
+        "fable": ("badge-fable", "card-fable"),
+        "judge": ("badge-judge", "card-judge"),
+    }
+    badge_cls, card_cls = badge_map.get(side, ("badge-judge", "card-judge"))
+    content_html = md_to_html(content_md)
     st.markdown(
         f'<div class="debate-card {card_cls}">'
         f'<span class="badge {badge_cls}">{model}</span>'
@@ -513,7 +522,7 @@ if start:
             render_debate_card_html(
                 f"{astra_display} ({pro_label.strip() or '찬성 측'})",
                 "astra",
-                results[f"astra_{r}"].replace("\n", "<br>"),
+                results[f"astra_{r}"],
             )
 
             # Arrow indicating response
@@ -523,7 +532,7 @@ if start:
             render_debate_card_html(
                 f"{fable_display} ({con_label.strip() or '반대 측'})",
                 "fable",
-                results[f"fable_{r}"].replace("\n", "<br>"),
+                results[f"fable_{r}"],
             )
 
         # --- Judge Verdict ---
@@ -543,12 +552,10 @@ if start:
             f'<div class="verdict-box {verdict_cls}">{verdict_text}</div>',
             unsafe_allow_html=True,
         )
-        st.markdown(
-            f'<div class="debate-card card-judge">'
-            f'<span class="badge badge-judge">Judge \u00b7 {judge_actual_model}</span>'
-            f'{judge_result.replace(chr(10), "<br>")}'
-            f'</div>',
-            unsafe_allow_html=True,
+        render_debate_card_html(
+            f"Judge \u00b7 {judge_actual_model}",
+            "judge",
+            judge_result,
         )
 
         # --- Transcript with Judge ---
