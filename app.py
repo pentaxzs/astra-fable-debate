@@ -130,8 +130,6 @@ ANTHROPIC_MODELS = [
     "claude-sonnet-4-20250514",
     "claude-haiku-4-5-20251001",
     "claude-opus-4-20250115",
-    "claude-3-5-sonnet-20241022",
-    "claude-3-5-haiku-20241022",
 ]
 
 
@@ -314,7 +312,9 @@ with st.sidebar:
     st.divider()
     st.header("모델 설정")
     astra_model = st.selectbox("OpenAI 모델", options=OPENAI_MODELS, index=0)
+    astra_model_custom = st.text_input("또는 직접 입력 (OpenAI)", placeholder="예: gpt-4o")
     fable_model = st.selectbox("Anthropic 모델", options=ANTHROPIC_MODELS, index=0)
+    fable_model_custom = st.text_input("또는 직접 입력 (Anthropic)", placeholder="예: claude-sonnet-4-20250514")
     astra_effort = st.select_slider("Astra reasoning effort", options=["low", "medium", "high", "xhigh", "max"], value="high")
     fable_effort = st.select_slider("Fable effort", options=["low", "medium", "high"], value="high")
     max_tokens = st.number_input("Fable max_tokens", min_value=512, max_value=16000, value=3000, step=256)
@@ -356,8 +356,8 @@ if start:
                 con_label=con_label.strip() or "반대 측",
                 openai_key=openai_key,
                 anthropic_key=anthropic_key,
-                astra_model=astra_model.strip(),
-                fable_model=fable_model.strip(),
+                astra_model=(astra_model_custom.strip() or astra_model).strip(),
+                fable_model=(fable_model_custom.strip() or fable_model).strip(),
                 astra_effort=astra_effort,
                 fable_effort=fable_effort,
                 max_tokens=int(max_tokens),
@@ -367,8 +367,8 @@ if start:
 
         st.success(f"토론이 완료되었습니다. (총 {num_rounds}라운드, API 호출 {num_rounds * 2}회)")
 
-        astra_display = astra_model.strip()
-        fable_display = fable_model.strip()
+        astra_display = (astra_model_custom.strip() or astra_model).strip()
+        fable_display = (fable_model_custom.strip() or fable_model).strip()
 
         for r in range(1, num_rounds + 1):
             label = ROUND_LABELS[r]
