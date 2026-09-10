@@ -52,12 +52,14 @@ def get_api_key(ui_value: str, env_name: str) -> str:
     return (ui_value or "").strip() or os.getenv(env_name, "").strip()
 
 
+REASONING_MODELS = {"o3-pro", "o3", "o4-mini"}
+
+
 def call_astra(client: OpenAI, prompt: str, model: str, effort: str) -> str:
-    response = client.responses.create(
-        model=model,
-        reasoning={"effort": effort},
-        input=prompt,
-    )
+    kwargs = {"model": model, "input": prompt}
+    if model in REASONING_MODELS:
+        kwargs["reasoning"] = {"effort": effort}
+    response = client.responses.create(**kwargs)
     return response.output_text
 
 
