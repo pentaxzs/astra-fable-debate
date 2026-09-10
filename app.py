@@ -127,10 +127,11 @@ OPENAI_MODELS = [
 
 ANTHROPIC_MODELS = [
     "claude-fable-5",
-    "claude-opus-4-6-20250904",
-    "claude-sonnet-4-6-20250514",
+    "claude-sonnet-4-20250514",
     "claude-haiku-4-5-20251001",
+    "claude-opus-4-20250115",
     "claude-3-5-sonnet-20241022",
+    "claude-3-5-haiku-20241022",
 ]
 
 
