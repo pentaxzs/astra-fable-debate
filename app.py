@@ -70,15 +70,18 @@ def call_fable(client: Anthropic, prompt: str, model: str, max_tokens: int, effo
         "messages": [{"role": "user", "content": prompt}],
     }
 
-    # Fable 5 supports output_config.effort. If an older SDK rejects it,
-    # retry once without output_config so the app remains usable.
+    # output_config.effort is only supported by some models.
+    # Fall back gracefully if the API or SDK rejects it.
     try:
         response = client.messages.create(
             **kwargs,
             output_config={"effort": effort},
         )
-    except TypeError:
-        response = client.messages.create(**kwargs)
+    except (TypeError, Exception) as exc:
+        if "effort" in str(exc).lower() or isinstance(exc, TypeError):
+            response = client.messages.create(**kwargs)
+        else:
+            raise
 
     texts = [
         block.text
