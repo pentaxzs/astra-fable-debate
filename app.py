@@ -88,6 +88,25 @@ st.markdown(
         color: #999;
         margin: 0.4rem 0;
     }
+
+    .card-judge {
+        background: linear-gradient(135deg, #fff8e1 0%, #fff3e0 100%);
+        border-left: 5px solid #f9a825;
+        border-right: 5px solid #f9a825;
+    }
+    .badge-judge { background: #f9a825; color: #fff; }
+
+    .verdict-box {
+        text-align: center;
+        font-size: 1.6rem;
+        font-weight: 800;
+        padding: 1rem;
+        margin: 0.8rem 0;
+        border-radius: 8px;
+    }
+    .verdict-astra { background: #43a047; color: #fff; }
+    .verdict-fable { background: #5e35b1; color: #fff; }
+    .verdict-draw { background: #757575; color: #fff; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -175,6 +194,92 @@ def call_fable(client: Anthropic, prompt: str, model: str, max_tokens: int, effo
     ]
     return "\n".join(texts).strip()
 
+
+JUDGE_PROVIDERS = ["OpenAI", "Anthropic"]
+
+
+def build_judge_prompt(topic: str, pro_label: str, con_label: str,
+                       results: dict, num_rounds: int) -> str:
+    transcript_parts = []
+    for r in range(1, num_rounds + 1):
+        label = ROUND_LABELS_MAP.get(r, f"라운드 {r}")
+        transcript_parts.append(f"## ROUND {r} — {label}")
+        transcript_parts.append(f"### Astra ({pro_label})\n{results[f'astra_{r}']}")
+        transcript_parts.append(f"### Fable ({con_label})\n{results[f'fable_{r}']}")
+    transcript = "\n\n".join(transcript_parts)
+
+    return f"""당신은 공정한 제3자 AI 심판(Judge)이다.
+아래는 "{topic}"에 대해 Astra({pro_label})와 Fable({con_label})이 {num_rounds}라운드에 걸쳐 진행한 토론 기록이다.
+
+{transcript}
+
+---
+
+위 토론을 분석하여 아래 세 항목을 반드시 포함하여 한국어로 답하라.
+
+### 1. 판정
+"Astra 승", "Fable 승", "무승부" 중 하나를 명확히 선언하라.
+
+### 2. 판정 이유
+- 각 측의 가장 강력했던 논거와 가장 약했던 논거를 짚어라.
+- 논리적 일관성, 근거의 구체성, 반론 대응력을 기준으로 평가하라.
+- 왜 해당 측이 이겼는지 (또는 무승부인지) 핵심 근거를 설명하라.
+{f"- 이 토론은 {num_rounds}라운드만 진행되었으므로 제한된 정보 하에서의 판정임을 밝혀라." if num_rounds < 3 else ""}
+
+### 3. 의사결정 권고
+이 토론 주제에 대해 실무 의사결정자에게 어떤 입장을 취하면 좋을지 구체적으로 권고하라.
+양측의 타당한 논거를 통합하여 현실적인 행동 방안을 제시하라.
+"""
+
+
+def call_judge(provider: str, model: str, prompt: str,
+               openai_key: str, anthropic_key: str, max_tokens: int) -> str:
+    if provider == "OpenAI":
+        client = OpenAI(api_key=openai_key)
+        kwargs = {"model": model, "input": prompt}
+        if model in REASONING_MODELS:
+            kwargs["reasoning"] = {"effort": "high"}
+        response = client.responses.create(**kwargs)
+        return response.output_text
+    else:
+        client = Anthropic(api_key=anthropic_key)
+        response = client.messages.create(
+            model=model,
+            max_tokens=max_tokens,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        texts = [
+            block.text
+            for block in response.content
+            if getattr(block, "type", None) == "text" and getattr(block, "text", None)
+        ]
+        return "\n".join(texts).strip()
+
+
+def parse_verdict(judge_text: str) -> str:
+    """Extract verdict keyword from judge response."""
+    lower = judge_text.lower()
+    # Search in the first ~500 chars where the verdict declaration usually is
+    verdict_section = lower[:500]
+    if "astra 승" in verdict_section or "astra가 승" in verdict_section or "astra의 승" in verdict_section:
+        return "astra"
+    if "fable 승" in verdict_section or "fable가 승" in verdict_section or "fable의 승" in verdict_section:
+        return "fable"
+    if "무승부" in verdict_section:
+        return "draw"
+    # Fallback: search entire text
+    if "astra 승" in lower:
+        return "astra"
+    if "fable 승" in lower:
+        return "fable"
+    return "draw"
+
+
+ROUND_LABELS_MAP = {
+    1: "독립 주장",
+    2: "상대 주장 비판",
+    3: "최종 반론",
+}
 
 ROUND_LABELS = {
     1: "독립 주장",
@@ -321,6 +426,15 @@ with st.sidebar:
     num_rounds = st.radio("토론 라운드 수", options=[1, 2, 3], index=2, horizontal=True,
                           help="1라운드=독립 주장만, 2라운드=+비판, 3라운드=+최종 반론")
 
+    st.divider()
+    st.header("Judge 설정")
+    judge_provider = st.selectbox("Judge 제공자", options=JUDGE_PROVIDERS, index=1)
+    if judge_provider == "OpenAI":
+        judge_model = st.selectbox("Judge 모델", options=OPENAI_MODELS, index=0, key="judge_model_openai")
+    else:
+        judge_model = st.selectbox("Judge 모델", options=ANTHROPIC_MODELS, index=0, key="judge_model_anthropic")
+    judge_model_custom = st.text_input("또는 직접 입력 (Judge)", placeholder="예: gpt-4o, claude-sonnet-4-20250514")
+
     st.caption("API Key는 브라우저 localStorage에만 저장됩니다.")
 
 left, right = st.columns([2, 1])
@@ -363,9 +477,26 @@ if start:
                 max_tokens=int(max_tokens),
                 num_rounds=num_rounds,
             )
-            status.update(label="토론 완료", state="complete", expanded=False)
+            st.write("Judge 판정 중…")
+            judge_actual_model = (judge_model_custom.strip() or judge_model).strip()
+            judge_prompt = build_judge_prompt(
+                topic.strip(),
+                pro_label.strip() or "찬성 측",
+                con_label.strip() or "반대 측",
+                results, num_rounds,
+            )
+            judge_result = call_judge(
+                provider=judge_provider,
+                model=judge_actual_model,
+                prompt=judge_prompt,
+                openai_key=openai_key,
+                anthropic_key=anthropic_key,
+                max_tokens=int(max_tokens),
+            )
+            status.update(label="토론 및 판정 완료", state="complete", expanded=False)
 
-        st.success(f"토론이 완료되었습니다. (총 {num_rounds}라운드, API 호출 {num_rounds * 2}회)")
+        total_calls = num_rounds * 2 + 1
+        st.success(f"토론이 완료되었습니다. (총 {num_rounds}라운드 + Judge 판정, API 호출 {total_calls}회)")
 
         astra_display = (astra_model_custom.strip() or astra_model).strip()
         fable_display = (fable_model_custom.strip() or fable_model).strip()
@@ -395,7 +526,34 @@ if start:
                 results[f"fable_{r}"].replace("\n", "<br>"),
             )
 
+        # --- Judge Verdict ---
+        verdict = parse_verdict(judge_result)
+        verdict_labels = {
+            "astra": ("Astra 승", "verdict-astra"),
+            "fable": ("Fable 승", "verdict-fable"),
+            "draw": ("무승부", "verdict-draw"),
+        }
+        verdict_text, verdict_cls = verdict_labels[verdict]
+
+        st.markdown(
+            '<div class="round-divider"><span>\u2696\ufe0f JUDGE \u2014 \ud310\uc815</span></div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f'<div class="verdict-box {verdict_cls}">{verdict_text}</div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f'<div class="debate-card card-judge">'
+            f'<span class="badge badge-judge">Judge \u00b7 {judge_actual_model}</span>'
+            f'{judge_result.replace(chr(10), "<br>")}'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+        # --- Transcript with Judge ---
         transcript = build_transcript(topic.strip(), pro_label, con_label, results, num_rounds)
+        transcript += f"\n## Judge 판정 ({judge_actual_model})\n\n{judge_result}\n"
         st.download_button(
             "토론 결과 Markdown으로 저장",
             data=transcript,
