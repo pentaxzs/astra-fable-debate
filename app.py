@@ -570,5 +570,26 @@ if start:
         )
 
     except Exception as exc:
-        st.error("API 호출 중 오류가 발생했습니다.")
-        st.exception(exc)
+        exc_msg = str(exc).lower()
+        if "not_found" in exc_msg or "404" in exc_msg:
+            # Extract model name from error message
+            import re
+            model_match = re.search(r"model:\s*(\S+)", str(exc))
+            bad_model = model_match.group(1) if model_match else "알 수 없음"
+            st.error(
+                f"모델 `{bad_model}`을(를) 찾을 수 없습니다. "
+                f"사이드바에서 다른 모델을 선택하거나, '직접 입력'에 올바른 모델 ID를 입력해주세요."
+            )
+            st.info(
+                "사용 가능한 모델 확인 방법:\n"
+                "```\n"
+                'curl https://api.anthropic.com/v1/models \\\n'
+                '  -H "x-api-key: YOUR_KEY" \\\n'
+                '  -H "anthropic-version: 2023-06-01"\n'
+                "```"
+            )
+        elif "authentication" in exc_msg or "401" in exc_msg:
+            st.error("API Key가 유효하지 않습니다. 사이드바에서 올바른 키를 입력해주세요.")
+        else:
+            st.error("API 호출 중 오류가 발생했습니다.")
+            st.exception(exc)
