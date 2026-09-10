@@ -1,8 +1,10 @@
+import json
 import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
 import streamlit as st
+from streamlit_js_eval import streamlit_js_eval
 from openai import OpenAI
 from anthropic import Anthropic
 
@@ -174,10 +176,55 @@ def run_debate(topic: str, pro_label: str, con_label: str,
 st.title("⚔️ Astra × Fable Debate")
 st.caption("GPT-6 Astra와 Claude Fable 5를 3라운드로 토론시키는 로컬 웹앱")
 
+# --- Load saved API keys from browser localStorage ---
+if "keys_loaded" not in st.session_state:
+    loaded = streamlit_js_eval(
+        js_expressions='JSON.stringify({o:localStorage.getItem("afd_openai_key")||"",a:localStorage.getItem("afd_anthropic_key")||""})',
+        key="load_keys",
+    )
+    if loaded is not None and loaded != 0:
+        data = json.loads(loaded)
+        st.session_state.saved_openai_key = data["o"]
+        st.session_state.saved_anthropic_key = data["a"]
+        st.session_state.keys_loaded = True
+        st.rerun()
+
 with st.sidebar:
     st.header("API 설정")
-    openai_key_ui = st.text_input("OpenAI API Key", type="password", help="비워두면 OPENAI_API_KEY 환경변수를 사용합니다.")
-    anthropic_key_ui = st.text_input("Anthropic API Key", type="password", help="비워두면 ANTHROPIC_API_KEY 환경변수를 사용합니다.")
+    openai_key_ui = st.text_input(
+        "OpenAI API Key",
+        value=st.session_state.get("saved_openai_key", ""),
+        type="password",
+        help="비워두면 OPENAI_API_KEY 환경변수를 사용합니다.",
+    )
+    anthropic_key_ui = st.text_input(
+        "Anthropic API Key",
+        value=st.session_state.get("saved_anthropic_key", ""),
+        type="password",
+        help="비워두면 ANTHROPIC_API_KEY 환경변수를 사용합니다.",
+    )
+
+    btn_col1, btn_col2 = st.columns(2)
+    with btn_col1:
+        if st.button("키 저장", use_container_width=True):
+            ok_js = json.dumps(openai_key_ui)
+            ak_js = json.dumps(anthropic_key_ui)
+            st.components.v1.html(
+                f'<script>localStorage.setItem("afd_openai_key",{ok_js});localStorage.setItem("afd_anthropic_key",{ak_js});</script>',
+                height=0,
+            )
+            st.session_state.saved_openai_key = openai_key_ui
+            st.session_state.saved_anthropic_key = anthropic_key_ui
+            st.toast("API Key가 브라우저에 저장되었습니다.")
+    with btn_col2:
+        if st.button("키 삭제", use_container_width=True):
+            st.components.v1.html(
+                '<script>localStorage.removeItem("afd_openai_key");localStorage.removeItem("afd_anthropic_key");</script>',
+                height=0,
+            )
+            st.session_state.saved_openai_key = ""
+            st.session_state.saved_anthropic_key = ""
+            st.toast("저장된 API Key가 삭제되었습니다.")
 
     st.divider()
     st.header("모델 설정")
@@ -189,7 +236,7 @@ with st.sidebar:
     num_rounds = st.radio("토론 라운드 수", options=[1, 2, 3], index=2, horizontal=True,
                           help="1라운드=독립 주장만, 2라운드=+비판, 3라운드=+최종 반론")
 
-    st.caption("API Key는 앱 내부에 저장하지 않습니다.")
+    st.caption("API Key는 브라우저 localStorage에만 저장됩니다.")
 
 left, right = st.columns([2, 1])
 with left:
