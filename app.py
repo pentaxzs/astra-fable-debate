@@ -154,11 +154,11 @@ OPENAI_MODELS = [
 ]
 
 ANTHROPIC_MODELS = [
-    "claude-haiku-4-5-20251001",
-    "claude-sonnet-5",
-    "claude-opus-5",
     "claude-fable-5-1",
+    "claude-opus-5",
+    "claude-sonnet-5",
     "claude-fable-5",
+    "claude-haiku-4-5-20251001",
 ]
 
 
@@ -374,78 +374,135 @@ def run_debate(topic: str, pro_label: str, con_label: str,
 st.title("⚔️ Astra × Fable Debate")
 st.caption("GPT-6 Astra와 Claude Fable 5를 3라운드로 토론시키는 로컬 웹앱")
 
-# --- Load saved API keys from browser localStorage ---
+# --- Load saved state from browser localStorage ---
+_LS_KEYS = "afd_openai_key afd_anthropic_key afd_astra_model afd_fable_model afd_judge_provider afd_judge_model".split()
+
 if "keys_loaded" not in st.session_state:
-    loaded = streamlit_js_eval(
-        js_expressions='JSON.stringify({o:localStorage.getItem("afd_openai_key")||"",a:localStorage.getItem("afd_anthropic_key")||""})',
-        key="load_keys",
-    )
+    js_expr = "JSON.stringify({" + ",".join(
+        f'{k.split("afd_")[1]}:localStorage.getItem("{k}")||""' for k in _LS_KEYS
+    ) + "})"
+    loaded = streamlit_js_eval(js_expressions=js_expr, key="load_keys")
     if loaded is not None and loaded != 0:
         data = json.loads(loaded)
-        st.session_state.saved_openai_key = data["o"]
-        st.session_state.saved_anthropic_key = data["a"]
+        st.session_state.saved_openai_key = data.get("openai_key", "")
+        st.session_state.saved_anthropic_key = data.get("anthropic_key", "")
+        st.session_state.saved_astra_model = data.get("astra_model", "")
+        st.session_state.saved_fable_model = data.get("fable_model", "")
+        st.session_state.saved_judge_provider = data.get("judge_provider", "")
+        st.session_state.saved_judge_model = data.get("judge_model", "")
         st.session_state.keys_loaded = True
         st.rerun()
 
-with st.sidebar:
-    st.header("API 설정")
-    openai_key_ui = st.text_input(
-        "OpenAI API Key",
-        value=st.session_state.get("saved_openai_key", ""),
-        type="password",
-        help="비워두면 OPENAI_API_KEY 환경변수를 사용합니다.",
-    )
-    anthropic_key_ui = st.text_input(
-        "Anthropic API Key",
-        value=st.session_state.get("saved_anthropic_key", ""),
-        type="password",
-        help="비워두면 ANTHROPIC_API_KEY 환경변수를 사용합니다.",
+# Determine if API keys are already saved (for auto-collapse)
+_has_saved_keys = bool(
+    st.session_state.get("saved_openai_key") or st.session_state.get("saved_anthropic_key")
+)
+
+
+def _save_to_ls(key: str, value: str):
+    """Save a single value to localStorage."""
+    st.components.v1.html(
+        f'<script>localStorage.setItem("{key}",{json.dumps(value)});</script>',
+        height=0,
     )
 
-    btn_col1, btn_col2 = st.columns(2)
-    with btn_col1:
-        if st.button("키 저장", use_container_width=True):
-            ok_js = json.dumps(openai_key_ui)
-            ak_js = json.dumps(anthropic_key_ui)
-            st.components.v1.html(
-                f'<script>localStorage.setItem("afd_openai_key",{ok_js});localStorage.setItem("afd_anthropic_key",{ak_js});</script>',
-                height=0,
-            )
-            st.session_state.saved_openai_key = openai_key_ui
-            st.session_state.saved_anthropic_key = anthropic_key_ui
-            st.toast("API Key가 브라우저에 저장되었습니다.")
-    with btn_col2:
-        if st.button("키 삭제", use_container_width=True):
-            st.components.v1.html(
-                '<script>localStorage.removeItem("afd_openai_key");localStorage.removeItem("afd_anthropic_key");</script>',
-                height=0,
-            )
-            st.session_state.saved_openai_key = ""
-            st.session_state.saved_anthropic_key = ""
-            st.toast("저장된 API Key가 삭제되었습니다.")
+
+with st.sidebar:
+    # --- API 설정 (collapsible) ---
+    with st.expander("API 설정", expanded=not _has_saved_keys):
+        openai_key_ui = st.text_input(
+            "OpenAI API Key",
+            value=st.session_state.get("saved_openai_key", ""),
+            type="password",
+            help="비워두면 OPENAI_API_KEY 환경변수를 사용합니다.",
+        )
+        anthropic_key_ui = st.text_input(
+            "Anthropic API Key",
+            value=st.session_state.get("saved_anthropic_key", ""),
+            type="password",
+            help="비워두면 ANTHROPIC_API_KEY 환경변수를 사용합니다.",
+        )
+        btn_col1, btn_col2 = st.columns(2)
+        with btn_col1:
+            if st.button("키 저장", use_container_width=True):
+                _save_to_ls("afd_openai_key", openai_key_ui)
+                _save_to_ls("afd_anthropic_key", anthropic_key_ui)
+                st.session_state.saved_openai_key = openai_key_ui
+                st.session_state.saved_anthropic_key = anthropic_key_ui
+                st.toast("API Key가 브라우저에 저장되었습니다.")
+                st.rerun()
+        with btn_col2:
+            if st.button("키 삭제", use_container_width=True):
+                st.components.v1.html(
+                    '<script>localStorage.removeItem("afd_openai_key");localStorage.removeItem("afd_anthropic_key");</script>',
+                    height=0,
+                )
+                st.session_state.saved_openai_key = ""
+                st.session_state.saved_anthropic_key = ""
+                st.toast("저장된 API Key가 삭제되었습니다.")
+                st.rerun()
+        st.caption("API Key는 브라우저 localStorage에만 저장됩니다.")
 
     st.divider()
     st.header("모델 설정")
-    astra_model = st.selectbox("OpenAI 모델", options=OPENAI_MODELS, index=0)
-    astra_model_custom = st.text_input("또는 직접 입력 (OpenAI)", placeholder="예: gpt-4o")
-    fable_model = st.selectbox("Anthropic 모델", options=ANTHROPIC_MODELS, index=0)
-    fable_model_custom = st.text_input("또는 직접 입력 (Anthropic)", placeholder="예: claude-sonnet-4-20250514")
-    astra_effort = st.select_slider("Astra reasoning effort", options=["low", "medium", "high", "xhigh", "max"], value="high")
-    fable_effort = st.select_slider("Fable effort", options=["low", "medium", "high"], value="high")
-    max_tokens = st.number_input("Fable max_tokens", min_value=512, max_value=16000, value=3000, step=256)
+
+    # --- OpenAI (Astra) ---
+    st.subheader("OpenAI (Astra)")
+    _saved_astra = st.session_state.get("saved_astra_model", "")
+    _astra_idx = OPENAI_MODELS.index(_saved_astra) if _saved_astra in OPENAI_MODELS else 0
+    astra_model = st.selectbox("모델", options=OPENAI_MODELS, index=_astra_idx, key="sel_astra")
+    astra_model_custom = st.text_input("직접 입력", placeholder="예: gpt-4o", key="custom_astra")
+    astra_effort = st.select_slider("reasoning effort", options=["low", "medium", "high", "xhigh", "max"], value="high", key="effort_astra")
+
+    st.markdown("---")
+
+    # --- Anthropic (Fable) ---
+    st.subheader("Anthropic (Fable)")
+    _saved_fable = st.session_state.get("saved_fable_model", "")
+    _fable_idx = ANTHROPIC_MODELS.index(_saved_fable) if _saved_fable in ANTHROPIC_MODELS else 0
+    fable_model = st.selectbox("모델", options=ANTHROPIC_MODELS, index=_fable_idx, key="sel_fable")
+    fable_model_custom = st.text_input("직접 입력", placeholder="예: claude-sonnet-5", key="custom_fable")
+    fable_effort = st.select_slider("effort", options=["low", "medium", "high"], value="high", key="effort_fable")
+    max_tokens = st.number_input("max_tokens", min_value=512, max_value=16000, value=3000, step=256)
+
+    st.divider()
+
+    # --- 토론 설정 ---
     num_rounds = st.radio("토론 라운드 수", options=[1, 2, 3], index=2, horizontal=True,
                           help="1라운드=독립 주장만, 2라운드=+비판, 3라운드=+최종 반론")
 
     st.divider()
-    st.header("Judge 설정")
-    judge_provider = st.selectbox("Judge 제공자", options=JUDGE_PROVIDERS, index=1)
-    if judge_provider == "OpenAI":
-        judge_model = st.selectbox("Judge 모델", options=OPENAI_MODELS, index=0, key="judge_model_openai")
-    else:
-        judge_model = st.selectbox("Judge 모델", options=ANTHROPIC_MODELS, index=0, key="judge_model_anthropic")
-    judge_model_custom = st.text_input("또는 직접 입력 (Judge)", placeholder="예: gpt-4o, claude-sonnet-4-20250514")
 
-    st.caption("API Key는 브라우저 localStorage에만 저장됩니다.")
+    # --- Judge 설정 ---
+    st.header("Judge 설정")
+    _saved_jp = st.session_state.get("saved_judge_provider", "")
+    _jp_idx = JUDGE_PROVIDERS.index(_saved_jp) if _saved_jp in JUDGE_PROVIDERS else 1
+    judge_provider = st.selectbox("제공자", options=JUDGE_PROVIDERS, index=_jp_idx)
+    if judge_provider == "OpenAI":
+        _saved_jm = st.session_state.get("saved_judge_model", "")
+        _jm_idx = OPENAI_MODELS.index(_saved_jm) if _saved_jm in OPENAI_MODELS else 0
+        judge_model = st.selectbox("모델", options=OPENAI_MODELS, index=_jm_idx, key="judge_model_openai")
+    else:
+        _saved_jm = st.session_state.get("saved_judge_model", "")
+        _jm_idx = ANTHROPIC_MODELS.index(_saved_jm) if _saved_jm in ANTHROPIC_MODELS else 0
+        judge_model = st.selectbox("모델", options=ANTHROPIC_MODELS, index=_jm_idx, key="judge_model_anthropic")
+    judge_model_custom = st.text_input("직접 입력", placeholder="예: claude-sonnet-5", key="custom_judge")
+
+    # --- 설정 저장 버튼 ---
+    st.divider()
+    if st.button("모델 설정 저장", use_container_width=True):
+        _astra_final = (astra_model_custom.strip() or astra_model).strip()
+        _fable_final = (fable_model_custom.strip() or fable_model).strip()
+        _judge_final = (judge_model_custom.strip() or judge_model).strip()
+        _save_to_ls("afd_astra_model", _astra_final)
+        _save_to_ls("afd_fable_model", _fable_final)
+        _save_to_ls("afd_judge_provider", judge_provider)
+        _save_to_ls("afd_judge_model", _judge_final)
+        st.session_state.saved_astra_model = _astra_final
+        st.session_state.saved_fable_model = _fable_final
+        st.session_state.saved_judge_provider = judge_provider
+        st.session_state.saved_judge_model = _judge_final
+        st.toast("모델 설정이 저장되었습니다.")
 
 left, right = st.columns([2, 1])
 with left:
