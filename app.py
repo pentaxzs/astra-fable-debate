@@ -34,12 +34,16 @@ st.markdown(
         line-height: 1.7;
         font-size: 0.95rem;
         box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        color: #1a1a1a !important;
     }
     .debate-card h1, .debate-card h2, .debate-card h3,
     .debate-card h4, .debate-card h5, .debate-card h6 {
         margin-top: 0.8rem; margin-bottom: 0.4rem;
+        color: #111 !important;
     }
-    .debate-card p { margin-bottom: 0.6rem; }
+    .debate-card p { margin-bottom: 0.6rem; color: #1a1a1a !important; }
+    .debate-card li { color: #1a1a1a !important; }
+    .debate-card strong { color: #000 !important; }
 
     .card-astra {
         background: linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%);
