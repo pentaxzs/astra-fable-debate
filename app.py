@@ -36,9 +36,14 @@ st.markdown(
         box-shadow: 0 2px 8px rgba(0,0,0,0.06);
         color: #1a1a1a !important;
     }
-    .debate-card h1, .debate-card h2, .debate-card h3,
-    .debate-card h4, .debate-card h5, .debate-card h6 {
+    .debate-card h1, .debate-card h2, .debate-card h3 {
+        font-size: 1.05rem !important;
         margin-top: 0.8rem; margin-bottom: 0.4rem;
+        color: #111 !important;
+    }
+    .debate-card h4, .debate-card h5, .debate-card h6 {
+        font-size: 0.95rem !important;
+        margin-top: 0.6rem; margin-bottom: 0.3rem;
         color: #111 !important;
     }
     .debate-card p { margin-bottom: 0.6rem; color: #1a1a1a !important; }
@@ -59,10 +64,10 @@ st.markdown(
 
     .badge {
         display: inline-block;
-        padding: 0.2rem 0.7rem;
+        padding: 0.25rem 0.8rem;
         border-radius: 20px;
         font-weight: 700;
-        font-size: 0.8rem;
+        font-size: 0.9rem;
         margin-bottom: 0.6rem;
         letter-spacing: 0.02em;
     }
@@ -213,17 +218,18 @@ JUDGE_PROVIDERS = ["OpenAI", "Anthropic"]
 
 
 def build_judge_prompt(topic: str, pro_label: str, con_label: str,
-                       results: dict, num_rounds: int) -> str:
+                       results: dict, num_rounds: int,
+                       openai_name: str = "", anthropic_name: str = "") -> str:
     transcript_parts = []
     for r in range(1, num_rounds + 1):
-        label = ROUND_LABELS_MAP.get(r, f"라운드 {r}")
+        label = ROUND_LABELS.get(r, f"라운드 {r}")
         transcript_parts.append(f"## ROUND {r} — {label}")
-        transcript_parts.append(f"### Astra ({pro_label})\n{results[f'astra_{r}']}")
-        transcript_parts.append(f"### Fable ({con_label})\n{results[f'fable_{r}']}")
+        transcript_parts.append(f"### {openai_name} ({pro_label})\n{results[f'astra_{r}']}")
+        transcript_parts.append(f"### {anthropic_name} ({con_label})\n{results[f'fable_{r}']}")
     transcript = "\n\n".join(transcript_parts)
 
     return f"""당신은 공정한 제3자 AI 심판(Judge)이다.
-아래는 "{topic}"에 대해 Astra({pro_label})와 Fable({con_label})이 {num_rounds}라운드에 걸쳐 진행한 토론 기록이다.
+아래는 "{topic}"에 대해 {openai_name}({pro_label})과 {anthropic_name}({con_label})이 {num_rounds}라운드에 걸쳐 진행한 토론 기록이다.
 
 {transcript}
 
@@ -232,7 +238,8 @@ def build_judge_prompt(topic: str, pro_label: str, con_label: str,
 위 토론을 분석하여 아래 세 항목을 반드시 포함하여 한국어로 답하라.
 
 ### 1. 판정
-"Astra 승", "Fable 승", "무승부" 중 하나를 명확히 선언하라.
+"{pro_label} 승", "{con_label} 승", "무승부" 중 하나를 명확히 선언하라.
+판정 시 모델명({openai_name}, {anthropic_name})이 아닌 역할명({pro_label}, {con_label})으로 표기하라.
 
 ### 2. 판정 이유
 - 각 측의 가장 강력했던 논거와 가장 약했던 논거를 짚어라.
@@ -270,30 +277,30 @@ def call_judge(provider: str, model: str, prompt: str,
         return "\n".join(texts).strip()
 
 
-def parse_verdict(judge_text: str) -> str:
-    """Extract verdict keyword from judge response."""
+def parse_verdict(judge_text: str, pro_label: str, con_label: str) -> str:
+    """Extract verdict keyword from judge response based on role labels."""
     lower = judge_text.lower()
+    pro = pro_label.lower()
+    con = con_label.lower()
     # Search in the first ~500 chars where the verdict declaration usually is
     verdict_section = lower[:500]
-    if "astra 승" in verdict_section or "astra가 승" in verdict_section or "astra의 승" in verdict_section:
-        return "astra"
-    if "fable 승" in verdict_section or "fable가 승" in verdict_section or "fable의 승" in verdict_section:
-        return "fable"
+    for keyword in [f"{pro} 승", f"{pro}이 승", f"{pro}의 승", f"{pro}가 승", f"{pro} 측 승", f"{pro}측 승"]:
+        if keyword in verdict_section:
+            return "pro"
+    for keyword in [f"{con} 승", f"{con}이 승", f"{con}의 승", f"{con}가 승", f"{con} 측 승", f"{con}측 승"]:
+        if keyword in verdict_section:
+            return "con"
     if "무승부" in verdict_section:
         return "draw"
     # Fallback: search entire text
-    if "astra 승" in lower:
-        return "astra"
-    if "fable 승" in lower:
-        return "fable"
+    for keyword in [f"{pro} 승", f"{pro}의 승"]:
+        if keyword in lower:
+            return "pro"
+    for keyword in [f"{con} 승", f"{con}의 승"]:
+        if keyword in lower:
+            return "con"
     return "draw"
 
-
-ROUND_LABELS_MAP = {
-    1: "독립 주장",
-    2: "상대 주장 비판",
-    3: "최종 반론",
-}
 
 ROUND_LABELS = {
     1: "독립 주장",
@@ -302,22 +309,23 @@ ROUND_LABELS = {
 }
 
 
-def build_transcript(topic: str, pro_label: str, con_label: str, results: dict, num_rounds: int) -> str:
+def build_transcript(topic: str, pro_label: str, con_label: str, results: dict, num_rounds: int,
+                     openai_name: str = "", anthropic_name: str = "") -> str:
     ts = datetime.now().strftime("%Y-%m-%d %H:%M")
     lines = [
-        f"# Astra × Fable Debate\n",
+        f"# AI Debate Arena\n",
         f"- 생성 시각: {ts}",
         f"- 토론 주제: {topic}",
-        f"- Astra 역할: {pro_label}",
-        f"- Fable 역할: {con_label}",
+        f"- OpenAI ({openai_name}): {pro_label}",
+        f"- Anthropic ({anthropic_name}): {con_label}",
         f"- 라운드 수: {num_rounds}",
         "",
     ]
     for r in range(1, num_rounds + 1):
         label = ROUND_LABELS[r]
         lines.append(f"## ROUND {r} — {label}\n")
-        lines.append(f"### Astra\n{results[f'astra_{r}']}\n")
-        lines.append(f"### Fable\n{results[f'fable_{r}']}\n")
+        lines.append(f"### {openai_name} ({pro_label})\n{results[f'astra_{r}']}\n")
+        lines.append(f"### {anthropic_name} ({con_label})\n{results[f'fable_{r}']}\n")
     return "\n".join(lines)
 
 
@@ -328,17 +336,17 @@ def _round1_prompts(topic, pro_label, con_label):
     return astra, fable
 
 
-def _round2_prompts(topic, pro_label, con_label, results):
+def _round2_prompts(topic, pro_label, con_label, results, openai_name="", anthropic_name=""):
     critique = "상대 주장을 다음 구조로 비판하라.\n1. 가장 강한 주장\n2. 가장 약한 주장\n3. 논리적 허점 또는 숨은 전제\n4. 가장 강력한 반론\n\n상대의 주장을 공정하게 재구성한 뒤 비판하고, 허수아비 논증을 피하라.\n한국어로 답하라."
-    astra = f"토론 주제:\n{topic}\n\n당신은 {pro_label}이다.\n\nClaude Fable의 주장:\n---\n{results['fable_1']}\n---\n\n{critique}"
-    fable = f"토론 주제:\n{topic}\n\n당신은 {con_label}이다.\n\nGPT-6 Astra의 주장:\n---\n{results['astra_1']}\n---\n\n{critique}"
+    astra = f"토론 주제:\n{topic}\n\n당신은 {pro_label}이다.\n\n상대측({anthropic_name}, {con_label})의 주장:\n---\n{results['fable_1']}\n---\n\n{critique}"
+    fable = f"토론 주제:\n{topic}\n\n당신은 {con_label}이다.\n\n상대측({openai_name}, {pro_label})의 주장:\n---\n{results['astra_1']}\n---\n\n{critique}"
     return astra, fable
 
 
-def _round3_prompts(topic, pro_label, con_label, results):
+def _round3_prompts(topic, pro_label, con_label, results, openai_name="", anthropic_name=""):
     closing = "이제 새로운 주장을 무작정 늘어놓지 말고 상대의 핵심 반론에 직접 답하면서 최종 입장을 제시하라.\n마지막에는 반드시 다음 세 항목을 포함하라.\n- 내가 여전히 맞다고 보는 이유\n- 상대방에게 인정하는 부분\n- 최종 결론\n\n한국어로 답하라."
-    astra = f"토론 주제:\n{topic}\n\n당신은 {pro_label}이다.\n\nClaude의 최초 주장:\n---\n{results['fable_1']}\n---\n\nClaude의 반론:\n---\n{results['fable_2']}\n---\n\n{closing}"
-    fable = f"토론 주제:\n{topic}\n\n당신은 {con_label}이다.\n\nAstra의 최초 주장:\n---\n{results['astra_1']}\n---\n\nAstra의 반론:\n---\n{results['astra_2']}\n---\n\n{closing}"
+    astra = f"토론 주제:\n{topic}\n\n당신은 {pro_label}이다.\n\n상대측({anthropic_name})의 최초 주장:\n---\n{results['fable_1']}\n---\n\n상대측의 반론:\n---\n{results['fable_2']}\n---\n\n{closing}"
+    fable = f"토론 주제:\n{topic}\n\n당신은 {con_label}이다.\n\n상대측({openai_name})의 최초 주장:\n---\n{results['astra_1']}\n---\n\n상대측의 반론:\n---\n{results['astra_2']}\n---\n\n{closing}"
     return astra, fable
 
 
@@ -364,7 +372,8 @@ def run_debate(topic: str, pro_label: str, con_label: str,
         if r == 1:
             astra_prompt, fable_prompt = builder(topic, pro_label, con_label)
         else:
-            astra_prompt, fable_prompt = builder(topic, pro_label, con_label, results)
+            astra_prompt, fable_prompt = builder(topic, pro_label, con_label, results,
+                                                  openai_name=astra_model, anthropic_name=fable_model)
 
         with ThreadPoolExecutor(max_workers=2) as pool:
             fa = pool.submit(call_astra, openai_client, astra_prompt, astra_model, astra_effort)
@@ -375,8 +384,8 @@ def run_debate(topic: str, pro_label: str, con_label: str,
     return results
 
 
-st.title("⚔️ Astra × Fable Debate")
-st.caption("GPT-6 Astra와 Claude Fable 5를 3라운드로 토론시키는 로컬 웹앱")
+st.title("⚔️ AI Debate Arena")
+st.caption("OpenAI vs Anthropic 모델을 N라운드로 토론시키고 AI Judge가 판정하는 웹앱")
 
 # --- Load saved state from browser localStorage ---
 _LS_KEYS = "afd_openai_key afd_anthropic_key afd_astra_model afd_fable_model afd_judge_provider afd_judge_model".split()
@@ -512,8 +521,8 @@ left, right = st.columns([2, 1])
 with left:
     topic = st.text_area("토론 주제", value=DEFAULT_TOPIC, height=140)
 with right:
-    pro_label = st.text_input("Astra 역할", value="찬성 측")
-    con_label = st.text_input("Fable 역할", value="반대 측")
+    pro_label = st.text_input("OpenAI 측 역할", value="찬성 측")
+    con_label = st.text_input("Anthropic 측 역할", value="반대 측")
 
 start = st.button("토론 시작", type="primary", use_container_width=True)
 
@@ -531,6 +540,9 @@ if start:
         st.error("Anthropic API Key가 필요합니다. 사이드바에 입력하거나 ANTHROPIC_API_KEY 환경변수를 설정해주세요.")
         st.stop()
 
+    astra_display = (astra_model_custom.strip() or astra_model).strip()
+    fable_display = (fable_model_custom.strip() or fable_model).strip()
+
     try:
         with st.status("토론을 진행하고 있습니다…", expanded=True) as status:
             for r in range(1, num_rounds + 1):
@@ -541,8 +553,8 @@ if start:
                 con_label=con_label.strip() or "반대 측",
                 openai_key=openai_key,
                 anthropic_key=anthropic_key,
-                astra_model=(astra_model_custom.strip() or astra_model).strip(),
-                fable_model=(fable_model_custom.strip() or fable_model).strip(),
+                astra_model=astra_display,
+                fable_model=fable_display,
                 astra_effort=astra_effort,
                 fable_effort=fable_effort,
                 max_tokens=int(max_tokens),
@@ -555,6 +567,8 @@ if start:
                 pro_label.strip() or "찬성 측",
                 con_label.strip() or "반대 측",
                 results, num_rounds,
+                openai_name=astra_display,
+                anthropic_name=fable_display,
             )
             judge_result = call_judge(
                 provider=judge_provider,
@@ -569,8 +583,13 @@ if start:
         total_calls = num_rounds * 2 + 1
         st.success(f"토론이 완료되었습니다. (총 {num_rounds}라운드 + Judge 판정, API 호출 {total_calls}회)")
 
-        astra_display = (astra_model_custom.strip() or astra_model).strip()
-        fable_display = (fable_model_custom.strip() or fable_model).strip()
+        # Model info banner
+        st.markdown(
+            f'<div style="text-align:center;color:#666;font-size:0.85rem;margin-bottom:1rem;">'
+            f'OpenAI: <b>{astra_display}</b> &nbsp;vs&nbsp; Anthropic: <b>{fable_display}</b> &nbsp;|&nbsp; Judge: <b>{judge_actual_model}</b>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
 
         for r in range(1, num_rounds + 1):
             label = ROUND_LABELS[r]
@@ -598,10 +617,12 @@ if start:
             )
 
         # --- Judge Verdict ---
-        verdict = parse_verdict(judge_result)
+        _pro = pro_label.strip() or "찬성 측"
+        _con = con_label.strip() or "반대 측"
+        verdict = parse_verdict(judge_result, _pro, _con)
         verdict_labels = {
-            "astra": ("Astra 승", "verdict-astra"),
-            "fable": ("Fable 승", "verdict-fable"),
+            "pro": (f"{_pro} 승 ({astra_display})", "verdict-astra"),
+            "con": (f"{_con} 승 ({fable_display})", "verdict-fable"),
             "draw": ("무승부", "verdict-draw"),
         }
         verdict_text, verdict_cls = verdict_labels[verdict]
@@ -621,7 +642,8 @@ if start:
         )
 
         # --- Transcript with Judge ---
-        transcript = build_transcript(topic.strip(), pro_label, con_label, results, num_rounds)
+        transcript = build_transcript(topic.strip(), pro_label, con_label, results, num_rounds,
+                                      openai_name=astra_display, anthropic_name=fable_display)
         transcript += f"\n## Judge 판정 ({judge_actual_model})\n\n{judge_result}\n"
         st.download_button(
             "토론 결과 Markdown으로 저장",
