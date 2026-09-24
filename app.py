@@ -80,9 +80,9 @@ st.markdown(
         border-radius: 16px !important;
         background: #fff !important;
         color: #222 !important;
-        padding: 6px 11px !important;
-        font-size: 0.84rem !important;
-        align-items: flex-start !important;
+        padding: 4px 10px !important;
+        font-size: 0.91rem !important;
+        align-items: center !important;
         justify-content: flex-start !important;
         text-align: left !important;
         overflow: hidden !important;
@@ -104,11 +104,11 @@ st.markdown(
     }
     [data-testid="stButtonGroup"] button[data-variant="pills"] p,
     [data-testid="stButtonGroup"] button[data-variant="pills"] [data-testid="stMarkdownContainer"] {
-        font-size: 0.84rem !important;
+        font-size: 0.91rem !important;
     }
     [data-testid="stButtonGroup"] button[data-variant="pills"] p {
         margin: 0 !important;
-        line-height: 1.2 !important;
+        line-height: 1.15 !important;
         white-space: normal !important;
         word-break: keep-all !important;
         overflow-wrap: anywhere !important;
