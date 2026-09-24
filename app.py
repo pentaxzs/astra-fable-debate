@@ -507,12 +507,6 @@ with st.sidebar:
 
     st.divider()
 
-    # --- 토론 설정 ---
-    num_rounds = st.radio("토론 라운드 수", options=[1, 2, 3], index=2, horizontal=True,
-                          help="1라운드=독립 주장만, 2라운드=+비판, 3라운드=+최종 반론")
-
-    st.divider()
-
     # --- Judge 설정 ---
     st.header("Judge 설정")
     _saved_jp = st.session_state.get("saved_judge_provider", "")
@@ -542,19 +536,38 @@ with st.sidebar:
         st.toast("모델 설정이 저장되었습니다.")
         st.rerun()
 
-left, right = st.columns([2, 1])
-with left:
-    topic = st.text_area("토론 주제", value=DEFAULT_TOPIC, height=140)
-with right:
+topic = st.text_area("토론 주제", value=DEFAULT_TOPIC, height=140)
+
+col_role1, col_role2 = st.columns(2)
+with col_role1:
     pro_label = st.text_input("OpenAI 측 역할", value="찬성 측")
+with col_role2:
     con_label = st.text_input("Anthropic 측 역할", value="반대 측")
 
-start = st.button("토론 시작", type="primary", use_container_width=True)
 
-if start:
+@st.dialog("토론 라운드 선택")
+def _round_dialog():
+    st.markdown("몇 라운드로 토론을 진행할까요?")
+    round_descs = {
+        1: "1라운드 — 독립 주장만 (API 3회)",
+        2: "2라운드 — 독립 주장 + 비판 (API 5회)",
+        3: "3라운드 — 독립 주장 + 비판 + 최종 반론 (API 7회)",
+    }
+    selected = st.radio(
+        "라운드 수",
+        options=[1, 2, 3],
+        index=2,
+        format_func=lambda x: round_descs[x],
+        label_visibility="collapsed",
+    )
+    if st.button("토론 시작", type="primary", use_container_width=True):
+        st.session_state["debate_rounds"] = selected
+        st.rerun()
+
+
+if st.button("토론 시작", type="primary", use_container_width=True):
     openai_key = get_api_key(openai_key_ui, "OPENAI_API_KEY")
     anthropic_key = get_api_key(anthropic_key_ui, "ANTHROPIC_API_KEY")
-
     if not topic.strip():
         st.error("토론 주제를 입력해주세요.")
         st.stop()
@@ -564,6 +577,13 @@ if start:
     if not anthropic_key:
         st.error("Anthropic API Key가 필요합니다. 사이드바에 입력하거나 ANTHROPIC_API_KEY 환경변수를 설정해주세요.")
         st.stop()
+    _round_dialog()
+
+# Actual debate execution (triggered after dialog selection)
+if "debate_rounds" in st.session_state:
+    num_rounds = st.session_state.pop("debate_rounds")
+    openai_key = get_api_key(openai_key_ui, "OPENAI_API_KEY")
+    anthropic_key = get_api_key(anthropic_key_ui, "ANTHROPIC_API_KEY")
 
     astra_display = (astra_model_custom.strip() or astra_model).strip()
     fable_display = (fable_model_custom.strip() or fable_model).strip()
