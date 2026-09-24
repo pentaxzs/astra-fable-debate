@@ -27,7 +27,13 @@ st.markdown(
     <style>
     .block-container {max-width: 900px; padding-top: 1rem; padding-bottom: 3rem;}
     /* Shrink title for mobile */
-    h1[data-testid="stHeading"] { font-size: 1.6rem !important; white-space: nowrap; }
+    h1[data-testid="stHeading"] { font-size: 1.3rem !important; white-space: nowrap; }
+    /* Taller start button */
+    div[data-testid="stButton"] > button[kind="primary"] {
+        padding-top: 0.85rem !important;
+        padding-bottom: 0.85rem !important;
+        font-size: 1.05rem !important;
+    }
     .small-note {color:#777; font-size:0.9rem;}
 
     .debate-card {
@@ -564,29 +570,8 @@ _suggestion_topics = _topics[1:]
 
 topic = st.text_area("토론 주제", value=st.session_state.get("selected_topic", _default_topic), height=100)
 
-# Listen for topic selection from the carousel iframe via postMessage
-# streamlit_js_eval installs a listener in the MAIN page context.
-if "topic_listener_installed" not in st.session_state:
-    streamlit_js_eval(
-        js_expressions="""
-        (function(){
-            window.addEventListener('message', function(e){
-                if(e.data && e.data.type === 'pick_topic'){
-                    // Set query param and reload to pass data to Streamlit
-                    var url = new URL(window.location.href);
-                    url.searchParams.set('pick_topic', e.data.topic);
-                    window.location.href = url.toString();
-                }
-            });
-            return 'ok';
-        })()
-        """,
-        key="install_topic_listener",
-    )
-    st.session_state.topic_listener_installed = True
-
 # Handle topic selection from query params
-_picked = st.query_params.get("pick_topic")
+_picked = st.query_params.get("t")
 if _picked:
     st.session_state.selected_topic = _picked
     st.query_params.clear()
@@ -594,13 +579,16 @@ if _picked:
 
 st.caption("추천 주제를 선택하면 바로 적용됩니다. 좌우로 스와이프하세요.")
 
-# Horizontal scrollable topic carousel via st.components.v1.html
+# Horizontal scrollable topic carousel
+# Uses window.top.location to navigate the top-level Streamlit page
 _chips = "".join(
     f'<div class="tc" onclick="pick({i})">{t}</div>'
     for i, t in enumerate(_suggestion_topics)
 )
+# Build the base URL from Streamlit's known host (strip existing params)
 _carousel_html = f"""
 <style>
+*{{margin:0;padding:0;box-sizing:border-box;}}
 .tc-wrap {{
     display:flex; overflow-x:auto; gap:10px; padding:4px 2px 12px 2px;
     scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch;
@@ -615,15 +603,23 @@ _carousel_html = f"""
     transition:transform .15s, box-shadow .15s;
     display:flex; align-items:center;
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-    box-sizing:border-box;
+    -webkit-tap-highlight-color:transparent;
+    user-select:none;
 }}
-.tc:hover,.tc:active {{ background:#f5f5f5; transform:translateY(-2px); box-shadow:0 4px 12px rgba(0,0,0,.1); }}
+.tc:active {{ background:#e8e8e8; }}
 </style>
 <div class="tc-wrap">{_chips}</div>
 <script>
 var topics = {json.dumps(_suggestion_topics)};
 function pick(i) {{
-    window.parent.postMessage({{type:'pick_topic', topic:topics[i]}}, '*');
+    try {{
+        var base = window.top.location.origin + window.top.location.pathname;
+        window.top.location.href = base + '?t=' + encodeURIComponent(topics[i]);
+    }} catch(e) {{
+        // Fallback: try parent
+        var base = window.parent.location.origin + window.parent.location.pathname;
+        window.parent.location.href = base + '?t=' + encodeURIComponent(topics[i]);
+    }}
 }}
 </script>
 """
