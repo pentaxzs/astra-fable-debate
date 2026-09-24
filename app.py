@@ -64,7 +64,7 @@ _T = {
                  else "linear-gradient(135deg, #fff8e1 0%, #fff3e0 100%)"),
     "shadow": "rgba(0,0,0,0.35)" if _DARK else "rgba(0,0,0,0.06)",
     "banner_fg": "#9aa0aa" if _DARK else "#666666",
-    "cta_glow": "rgba(255,75,75,0.28)" if _DARK else "rgba(255,75,75,0.35)",
+    "cta_glow": "rgba(255,75,75,0.26)" if _DARK else "rgba(255,75,75,0.32)",
 }
 
 st.markdown(
@@ -77,14 +77,19 @@ st.markdown(
        has to be targeted directly: font-size on the button itself never
        reaches the text. */
     [data-testid="stBaseButton-primary"] {
-        padding: 1.1rem 1.2rem !important;
-        box-shadow: 0 4px 14px $cta_glow !important;
+        height: 62px !important;
+        min-height: 62px !important;
+        padding: 0 1.2rem !important;
+        align-items: center !important;
+        justify-content: center !important;
+        box-shadow: 0 3px 12px $cta_glow !important;
     }
     [data-testid="stBaseButton-primary"] p {
-        font-size: 1.45rem !important;
+        font-size: 1.4rem !important;
         font-weight: 800 !important;
         letter-spacing: 0.01em !important;
-        line-height: 1.25 !important;
+        line-height: 1.2 !important;
+        margin: 0 !important;
     }
 
     /* Widget labels + inputs: slightly larger for mobile readability */
