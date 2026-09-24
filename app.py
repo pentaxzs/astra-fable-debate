@@ -1,5 +1,6 @@
 import json
 import os
+import random
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
@@ -122,6 +123,22 @@ st.markdown(
     .verdict-astra { background: #43a047; color: #fff; }
     .verdict-fable { background: #5e35b1; color: #fff; }
     .verdict-draw { background: #757575; color: #fff; }
+
+    .topic-card-btn button {
+        background: #f5f5f5 !important;
+        border: 1px solid #ddd !important;
+        border-radius: 10px !important;
+        padding: 0.6rem 0.8rem !important;
+        font-size: 0.85rem !important;
+        color: #333 !important;
+        text-align: left !important;
+        line-height: 1.4 !important;
+        min-height: 3.2rem !important;
+    }
+    .topic-card-btn button:hover {
+        background: #e3f2fd !important;
+        border-color: #90caf9 !important;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -147,8 +164,20 @@ def render_debate_card_html(model: str, side: str, content_md: str):
     )
 
 
-DEFAULT_TOPIC = """AI 시대에는 프로덕트 디자이너보다
-프로덕트 매니저의 역할이 더 크게 축소될 것이다."""
+DEBATE_TOPICS = [
+    "AI 시대에는 프로덕트 디자이너보다 프로덕트 매니저의 역할이 더 크게 축소될 것이다.",
+    "AGI는 2030년 이전에 실현될 것이다.",
+    "AI는 결국 인류 존립을 위협하는 존재가 될 것이다.",
+    "5년 내에 AI가 주니어 개발자를 완전히 대체할 것이다.",
+    "5년 내에 AI가 주니어 디자이너를 완전히 대체할 것이다.",
+    "5년 내에 AI가 주니어 기획자를 완전히 대체할 것이다.",
+    "AI 창작물에도 저작권을 인정해야 한다.",
+    "AI 규제는 혁신을 저해하므로 최소화해야 한다.",
+    "AI 시대에 대학 교육은 더 이상 필요하지 않다.",
+    "자율주행차의 사고 책임은 탑승자가 아닌 제조사에 있다.",
+    "AI가 의사의 진단 역할을 대체하는 것은 바람직하다.",
+    "원격근무는 AI 시대에 오히려 줄어들 것이다.",
+]
 
 OPENAI_MODELS = [
     "gpt-6-astra",
@@ -536,7 +565,28 @@ with st.sidebar:
         st.toast("모델 설정이 저장되었습니다.")
         st.rerun()
 
-topic = st.text_area("토론 주제", value=DEFAULT_TOPIC, height=140)
+# --- Shuffle topics once per session ---
+if "shuffled_topics" not in st.session_state:
+    shuffled = DEBATE_TOPICS[:]
+    random.shuffle(shuffled)
+    st.session_state.shuffled_topics = shuffled
+
+_topics = st.session_state.shuffled_topics
+_default_topic = _topics[0]
+_suggestion_topics = _topics[1:]
+
+topic = st.text_area("토론 주제", value=st.session_state.get("selected_topic", _default_topic), height=100)
+
+st.caption("추천 주제를 선택하면 바로 적용됩니다.")
+_cols = st.columns(3)
+for i, t in enumerate(_suggestion_topics):
+    with _cols[i % 3]:
+        with st.container():
+            st.markdown('<div class="topic-card-btn">', unsafe_allow_html=True)
+            if st.button(t, key=f"topic_{i}", use_container_width=True):
+                st.session_state.selected_topic = t
+                st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
 
 col_role1, col_role2 = st.columns(2)
 with col_role1:
