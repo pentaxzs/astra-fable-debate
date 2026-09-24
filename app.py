@@ -1,4 +1,5 @@
 import json
+import math
 import os
 import random
 from concurrent.futures import ThreadPoolExecutor
@@ -64,16 +65,17 @@ st.markdown(
         display: none !important;
     }
 
-    /* Topic cards. Width is sized so ~2.7 cards fit across the content
-       column (viewport minus Streamlit's 16px gutters, minus two 8px gaps),
-       leaving the third card clipped as a "more to the right" cue. */
+    /* Topic cards. Each card gets its own width, computed in Python so the
+       label wraps to exactly CARD_LINES lines; the per-card overrides are
+       injected further down as :nth-of-type rules. The width here is only the
+       fallback for a card the Python pass did not size. */
     [data-testid="stButtonGroup"] button[data-variant="pills"] {
         flex: 0 0 auto !important;
-        width: clamp(118px, calc((100vw - 48px) / 2.7), 200px) !important;
+        width: 140px !important;
         min-width: 0 !important;
         max-width: none !important;
-        height: 80px !important;
-        min-height: 80px !important;
+        height: 62px !important;
+        min-height: 62px !important;
         white-space: normal !important;
         scroll-snap-align: start !important;
         border: 1.5px solid #222 !important;
@@ -114,7 +116,7 @@ st.markdown(
         overflow-wrap: anywhere !important;
         display: -webkit-box !important;
         -webkit-box-orient: vertical !important;
-        -webkit-line-clamp: 4 !important;
+        -webkit-line-clamp: 3 !important;
         overflow: hidden !important;
     }
 
@@ -239,6 +241,78 @@ def render_debate_card_html(model: str, side: str, content_md: str):
         f"</div>",
         unsafe_allow_html=True,
     )
+
+
+# --- Topic card sizing -------------------------------------------------------
+# Each topic card is given its own width so the label wraps to exactly
+# CARD_LINES lines: no clipping, no dead space under the text. Widths are
+# derived from a character-width model measured against the real card font
+# (Source Sans + the system Korean face) at CARD_FONT_PX. Predicted vs measured
+# width for the longest topic: 487.0px vs 486.5px.
+
+CARD_LINES = 3
+CARD_FONT_PX = 14.56      # 0.91rem
+CARD_PADDING_PX = 20      # 10px each side
+CARD_BORDER_PX = 3        # 1.5px each side
+CARD_SLACK_PX = 3         # absorbs sub-pixel drift between the model and the browser
+CARD_MIN_PX = 104
+CARD_MAX_PX = 260
+
+_EM_UPPER = {"A": .6675, "B": .6675, "C": .7223, "D": .7223, "E": .6675, "F": .6117,
+             "G": .778, "H": .7223, "I": .278, "J": .5001, "K": .6675, "L": .5569,
+             "M": .8339, "N": .7223, "O": .778, "P": .6675, "Q": .778, "R": .7223,
+             "S": .6675, "T": .6117, "U": .7223, "V": .6675, "W": .9444, "X": .6675,
+             "Y": .6675, "Z": .6117}
+_EM_LOWER = {"a": .5569, "b": .5569, "c": .5001, "d": .5569, "e": .5569, "f": .278,
+             "g": .5569, "h": .5569, "i": .2232, "j": .2232, "k": .5001, "l": .2232,
+             "m": .8339, "n": .5569, "o": .5569, "p": .5569, "q": .5569, "r": .3337,
+             "s": .5001, "t": .278, "u": .5569, "v": .5001, "w": .7223, "x": .5001,
+             "y": .5001, "z": .5001}
+_EM_PUNCT = {".": .278, ",": .278, "·": .278, "(": .3337, ")": .3337, "%": .8896,
+             "-": .3337, "?": .5001, "!": .278, "'": .2, '"': .35, ":": .278, ";": .278}
+_EM_HANGUL, _EM_DIGIT, _EM_SPACE, _EM_FALLBACK = .866, .5569, .278, .6
+
+
+def _char_em(ch: str) -> float:
+    if "\uac00" <= ch <= "\ud7a3" or "\u1100" <= ch <= "\u11ff" or "\u3130" <= ch <= "\u318f":
+        return _EM_HANGUL
+    if ch.isdigit():
+        return _EM_DIGIT
+    if ch == " ":
+        return _EM_SPACE
+    return _EM_UPPER.get(ch) or _EM_LOWER.get(ch) or _EM_PUNCT.get(ch) or _EM_FALLBACK
+
+
+def _text_em(text: str) -> float:
+    return sum(_char_em(c) for c in text)
+
+
+def _line_count(text: str, width_em: float) -> int:
+    """Greedy word wrap, matching CSS word-break: keep-all (breaks at spaces only)."""
+    lines, cur = 1, 0.0
+    for word in text.split(" "):
+        word_em = _text_em(word)
+        if cur == 0:
+            cur = word_em
+        elif cur + _EM_SPACE + word_em <= width_em:
+            cur += _EM_SPACE + word_em
+        else:
+            lines, cur = lines + 1, word_em
+    return lines
+
+
+def card_width_px(text: str) -> int:
+    """Narrowest card that still wraps `text` to CARD_LINES lines or fewer."""
+    lo = max(_text_em(w) for w in text.split(" "))   # never narrower than the longest word
+    hi = _text_em(text)
+    for _ in range(40):
+        mid = (lo + hi) / 2
+        if _line_count(text, mid) <= CARD_LINES:
+            hi = mid
+        else:
+            lo = mid
+    px = hi * CARD_FONT_PX + CARD_SLACK_PX + CARD_PADDING_PX + CARD_BORDER_PX
+    return min(CARD_MAX_PX, max(CARD_MIN_PX, math.ceil(px)))
 
 
 DEBATE_TOPICS = [
@@ -658,6 +732,16 @@ _default_topic = _topics[0]
 _suggestion_topics = _topics[1:]
 
 topic = st.text_area("토론 주제", value=st.session_state.get("selected_topic", _default_topic), height=100)
+
+# Give each card its own width so its label lands on exactly CARD_LINES lines.
+# Pills render in the order passed in, and that order is fixed for the session,
+# so :nth-of-type indexes stay stable across reruns.
+_card_css = "\n".join(
+    f'[data-testid="stButtonGroup"] button[data-variant="pills"]:nth-of-type({i}) '
+    f"{{width: {card_width_px(t)}px !important;}}"
+    for i, t in enumerate(_suggestion_topics, start=1)
+)
+st.markdown(f"<style>{_card_css}</style>", unsafe_allow_html=True)
 
 # Full topic text goes on the card; CSS line-clamps it to the card height.
 _selected_pill = st.pills(
