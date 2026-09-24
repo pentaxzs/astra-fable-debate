@@ -30,42 +30,62 @@ st.markdown(
     /* Start button: big, bold, prominent */
     button[kind="primary"] {
         padding: 1rem 1.2rem !important;
-        font-size: 1.2rem !important;
+        font-size: 1.3rem !important;
         font-weight: 800 !important;
         letter-spacing: 0.02em !important;
     }
 
-    /* Pills → horizontal scroll card strip */
-    [data-testid="stPills"] [role="tablist"],
-    [data-testid="stPills"] > div,
-    [data-testid="stPills"] > div > div {
+    /* Widget labels + inputs: slightly larger for mobile readability */
+    [data-testid="stWidgetLabel"] p,
+    [data-testid="stWidgetLabel"] label,
+    label[data-testid="stWidgetLabel"] {
+        font-size: 0.95rem !important;
+    }
+    [data-testid="stTextArea"] textarea,
+    [data-testid="stTextInput"] input {
+        font-size: 1.02rem !important;
+        line-height: 1.55 !important;
+    }
+
+    /* Pills → horizontal scroll card strip (st.pills is rendered as a
+       button group; the inner group is the scroll container) */
+    [data-testid="stButtonGroup"] > div:last-child {
         flex-wrap: nowrap !important;
         overflow-x: auto !important;
+        overflow-y: hidden !important;
         scrollbar-width: none !important;
+        -ms-overflow-style: none !important;
         -webkit-overflow-scrolling: touch !important;
+        scroll-snap-type: x proximity !important;
         gap: 8px !important;
+        padding-bottom: 2px !important;
     }
-    [data-testid="stPills"] [role="tablist"]::-webkit-scrollbar,
-    [data-testid="stPills"] > div::-webkit-scrollbar,
-    [data-testid="stPills"] > div > div::-webkit-scrollbar { display: none !important; }
+    [data-testid="stButtonGroup"] > div:last-child::-webkit-scrollbar {
+        display: none !important;
+    }
 
-    [data-testid="stPills"] button,
-    [data-testid="stPills"] [role="tab"] {
+    [data-testid="stButtonGroup"] button[data-variant="pills"] {
         flex: 0 0 auto !important;
         white-space: nowrap !important;
+        scroll-snap-align: start !important;
         border: 1.5px solid #222 !important;
         border-radius: 14px !important;
         background: #fff !important;
         color: #222 !important;
-        padding: 8px 16px !important;
-        font-size: 0.82rem !important;
+        padding: 9px 17px !important;
+        font-size: 0.92rem !important;
     }
-    [data-testid="stPills"] button[aria-selected="true"],
-    [data-testid="stPills"] [role="tab"][aria-selected="true"] {
+    [data-testid="stButtonGroup"] button[data-variant="pills"][aria-checked="true"],
+    [data-testid="stButtonGroup"] button[data-variant="pills"][aria-selected="true"] {
         background: #222 !important;
         color: #fff !important;
     }
-    .small-note {color:#777; font-size:0.9rem;}
+    [data-testid="stButtonGroup"] button[data-variant="pills"] p,
+    [data-testid="stButtonGroup"] button[data-variant="pills"] [data-testid="stMarkdownContainer"] {
+        font-size: 0.92rem !important;
+    }
+
+    .small-note {color:#777; font-size:0.95rem;}
 
     .debate-card {
         border-radius: 12px;
@@ -438,8 +458,10 @@ def run_debate(topic: str, pro_label: str, con_label: str,
 
 
 st.markdown(
-    '<h1 style="font-size:1.5rem;line-height:1.8;margin:0 0 0.3rem 0;white-space:nowrap;overflow:visible;">⚔️ AI Debate Arena</h1>'
-    '<p style="color:#888;font-size:0.8rem;margin:0 0 0.8rem 0;">OpenAI vs Anthropic 모델을 N라운드로 토론시키고 AI Judge가 판정하는 웹앱</p>',
+    '<h1 style="font-size:clamp(1.6rem, 9.6vw, 2.6rem);line-height:1.25;margin:0 0 0.45rem 0;'
+    'white-space:nowrap;overflow:visible;">⚔️ AI Debate Arena</h1>'
+    '<p style="color:#888;font-size:0.95rem;line-height:1.5;margin:0 0 1rem 0;">'
+    'OpenAI vs Anthropic 모델을 N라운드로 토론시키고 AI Judge가 판정하는 웹앱</p>',
     unsafe_allow_html=True,
 )
 
@@ -614,6 +636,7 @@ _selected_pill = st.pills(
     options=_pill_labels,
     default=None,
     label_visibility="collapsed",
+    wrap=False,
 )
 if _selected_pill is not None:
     _idx = _pill_labels.index(_selected_pill)
