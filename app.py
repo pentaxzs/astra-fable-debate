@@ -124,37 +124,6 @@ st.markdown(
     .verdict-fable { background: #5e35b1; color: #fff; }
     .verdict-draw { background: #757575; color: #fff; }
 
-    .topic-scroll {
-        display: flex;
-        overflow-x: auto;
-        gap: 0.7rem;
-        padding: 0.5rem 0 0.8rem 0;
-        scroll-snap-type: x mandatory;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: none;
-    }
-    .topic-scroll::-webkit-scrollbar { display: none; }
-    .topic-chip {
-        flex: 0 0 auto;
-        width: 220px;
-        min-height: 70px;
-        background: #2a2a2a;
-        border-radius: 14px;
-        padding: 0.8rem 1rem;
-        font-size: 0.82rem;
-        color: #eee !important;
-        line-height: 1.45;
-        cursor: pointer;
-        scroll-snap-align: start;
-        transition: transform 0.15s, box-shadow 0.15s;
-        display: flex;
-        align-items: center;
-    }
-    .topic-chip:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.25);
-        background: #3a3a3a;
-    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -595,33 +564,58 @@ topic = st.text_area("토론 주제", value=st.session_state.get("selected_topic
 
 st.caption("추천 주제를 선택하면 바로 적용됩니다. 좌우로 스와이프하세요.")
 
-# Build horizontal scrollable topic chips as a single HTML component
-_chips_html = ""
+# Horizontal scrollable topic chips using native Streamlit buttons
+# Wrap in a container div that enables horizontal scroll via CSS
+_chip_cols = st.columns(len(_suggestion_topics))
 for i, t in enumerate(_suggestion_topics):
-    _escaped = t.replace('"', '&quot;').replace("'", "\\'")
-    _chips_html += f'<div class="topic-chip" onclick="selectTopic({i})">{t}</div>'
+    with _chip_cols[i]:
+        if st.button(t, key=f"topic_{i}", use_container_width=True):
+            st.session_state.selected_topic = t
+            st.rerun()
 
-_topic_carousel_html = f"""
-<div class="topic-scroll">{_chips_html}</div>
-<script>
-function selectTopic(idx) {{
-    var topics = {json.dumps(_suggestion_topics)};
-    var topic = topics[idx];
-    // Update the Streamlit text_area via query params and reload
-    var url = new URL(window.parent.location.href);
-    url.searchParams.set('pick_topic', topic);
-    window.parent.location.href = url.toString();
-}}
-</script>
-"""
-st.markdown(_topic_carousel_html, unsafe_allow_html=True)
-
-# Handle topic selection from query params
-_picked = st.query_params.get("pick_topic")
-if _picked:
-    st.session_state.selected_topic = _picked
-    st.query_params.clear()
-    st.rerun()
+# Inject CSS to make the button row horizontally scrollable
+st.markdown(
+    """
+    <style>
+    /* Make the columns container (direct parent of topic buttons) horizontally scrollable */
+    div[data-testid="stColumns"]:has(> div > div > div > div > button[kind="secondary"]) {
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        gap: 0.5rem !important;
+        padding-bottom: 0.3rem;
+    }
+    div[data-testid="stColumns"]:has(> div > div > div > div > button[kind="secondary"])::-webkit-scrollbar {
+        display: none;
+    }
+    div[data-testid="stColumns"]:has(> div > div > div > div > button[kind="secondary"]) > div[data-testid="stColumn"] {
+        flex: 0 0 220px !important;
+        min-width: 220px !important;
+        scroll-snap-align: start;
+    }
+    div[data-testid="stColumns"]:has(> div > div > div > div > button[kind="secondary"]) button {
+        background: #fff !important;
+        border: 1.5px solid #222 !important;
+        border-radius: 14px !important;
+        color: #222 !important;
+        font-size: 0.82rem !important;
+        line-height: 1.45 !important;
+        padding: 0.8rem 1rem !important;
+        min-height: 70px !important;
+        text-align: left !important;
+        white-space: normal !important;
+    }
+    div[data-testid="stColumns"]:has(> div > div > div > div > button[kind="secondary"]) button:hover {
+        background: #f5f5f5 !important;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 col_role1, col_role2 = st.columns(2)
 with col_role1:
