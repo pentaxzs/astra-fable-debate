@@ -50,7 +50,7 @@ st.markdown(
 
     /* Pills → horizontal scroll card strip (st.pills is rendered as a
        button group; the inner group is the scroll container) */
-    [data-testid="stButtonGroup"] > div:last-child {
+    [data-testid="stButtonGroup"]:has(button[data-variant="pills"]) > div:last-child {
         flex-wrap: nowrap !important;
         overflow-x: auto !important;
         overflow-y: hidden !important;
@@ -61,7 +61,7 @@ st.markdown(
         gap: 8px !important;
         padding-bottom: 2px !important;
     }
-    [data-testid="stButtonGroup"] > div:last-child::-webkit-scrollbar {
+    [data-testid="stButtonGroup"]:has(button[data-variant="pills"]) > div:last-child::-webkit-scrollbar {
         display: none !important;
     }
 
@@ -762,27 +762,25 @@ with col_role2:
     con_label = st.text_input("Anthropic 측 역할", value="반대 측")
 
 
-@st.dialog("토론 라운드 선택")
-def _round_dialog():
-    st.markdown("몇 라운드로 토론을 진행할까요?")
-    round_descs = {
-        1: "1라운드 — 독립 주장만 (API 3회)",
-        2: "2라운드 — 독립 주장 + 비판 (API 5회)",
-        3: "3라운드 — 독립 주장 + 비판 + 최종 반론 (API 7회)",
-    }
-    selected = st.radio(
-        "라운드 수",
-        options=[1, 2, 3],
-        index=2,
-        format_func=lambda x: round_descs[x],
-        label_visibility="collapsed",
-    )
-    if st.button("💬 토론 시작", type="primary", use_container_width=True):
-        st.session_state["debate_rounds"] = selected
-        st.rerun()
+ROUND_SUMMARIES = {
+    1: "독립 주장 · API 호출 3회",
+    2: "독립 주장 + 상대 주장 비판 · API 호출 5회",
+    3: "독립 주장 + 상대 주장 비판 + 최종 반론 · API 호출 7회",
+}
 
+_rounds = st.segmented_control(
+    "토론 라운드",
+    options=[1, 2, 3],
+    default=3,
+    required=True,
+    format_func=lambda x: f"{x}라운드",
+)
+num_rounds = _rounds or 3
+st.caption(ROUND_SUMMARIES[num_rounds])
 
-if st.button("💬 토론 시작", type="primary", use_container_width=True):
+_start_clicked = st.button("💬 토론 시작", type="primary", use_container_width=True)
+
+if _start_clicked:
     openai_key = get_api_key(openai_key_ui, "OPENAI_API_KEY")
     anthropic_key = get_api_key(anthropic_key_ui, "ANTHROPIC_API_KEY")
     if not topic.strip():
@@ -794,13 +792,6 @@ if st.button("💬 토론 시작", type="primary", use_container_width=True):
     if not anthropic_key:
         st.error("Anthropic API Key가 필요합니다. 사이드바에 입력하거나 ANTHROPIC_API_KEY 환경변수를 설정해주세요.")
         st.stop()
-    _round_dialog()
-
-# Actual debate execution (triggered after dialog selection)
-if "debate_rounds" in st.session_state:
-    num_rounds = st.session_state.pop("debate_rounds")
-    openai_key = get_api_key(openai_key_ui, "OPENAI_API_KEY")
-    anthropic_key = get_api_key(anthropic_key_ui, "ANTHROPIC_API_KEY")
 
     astra_display = (astra_model_custom.strip() or astra_model).strip()
     fable_display = (fable_model_custom.strip() or fable_model).strip()
