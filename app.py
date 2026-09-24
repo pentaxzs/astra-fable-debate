@@ -26,13 +26,24 @@ st.markdown(
     """
     <style>
     .block-container {max-width: 900px; padding-top: 1rem; padding-bottom: 3rem;}
-    /* Shrink title for mobile */
-    h1[data-testid="stHeading"] { font-size: 1.1rem !important; white-space: nowrap; }
     /* Taller start button */
     div[data-testid="stButton"] > button[kind="primary"] {
-        padding-top: 0.85rem !important;
-        padding-bottom: 0.85rem !important;
-        font-size: 1.05rem !important;
+        padding-top: 0.9rem !important;
+        padding-bottom: 0.9rem !important;
+        font-size: 1.1rem !important;
+        font-weight: 700 !important;
+    }
+    /* Pills horizontal scroll */
+    div[data-testid="stPills"] > div {
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+    }
+    div[data-testid="stPills"] > div::-webkit-scrollbar { display: none; }
+    div[data-testid="stPills"] > div > button {
+        flex: 0 0 auto !important;
+        white-space: nowrap !important;
     }
     .small-note {color:#777; font-size:0.9rem;}
 
@@ -406,8 +417,11 @@ def run_debate(topic: str, pro_label: str, con_label: str,
     return results
 
 
-st.title("⚔️ AI Debate Arena")
-st.caption("OpenAI vs Anthropic 모델을 N라운드로 토론시키고 AI Judge가 판정하는 웹앱")
+st.markdown(
+    '<h1 style="font-size:1.4rem;margin:0 0 0.2rem 0;white-space:nowrap;">⚔️ AI Debate Arena</h1>'
+    '<p style="color:#888;font-size:0.8rem;margin:0 0 0.8rem 0;">OpenAI vs Anthropic 모델을 N라운드로 토론시키고 AI Judge가 판정하는 웹앱</p>',
+    unsafe_allow_html=True,
+)
 
 # --- Persistent settings via a single cookie (JSON blob) ---
 # All reads AND writes go through streamlit_js_eval (runs in the main page
@@ -610,12 +624,12 @@ def _round_dialog():
         format_func=lambda x: round_descs[x],
         label_visibility="collapsed",
     )
-    if st.button("토론 시작", type="primary", use_container_width=True):
+    if st.button("💬 토론 시작", type="primary", use_container_width=True):
         st.session_state["debate_rounds"] = selected
         st.rerun()
 
 
-if st.button("토론 시작", type="primary", use_container_width=True):
+if st.button("💬 토론 시작", type="primary", use_container_width=True):
     openai_key = get_api_key(openai_key_ui, "OPENAI_API_KEY")
     anthropic_key = get_api_key(anthropic_key_ui, "ANTHROPIC_API_KEY")
     if not topic.strip():
