@@ -64,25 +64,58 @@ st.markdown(
         display: none !important;
     }
 
+    /* Topic cards. Width is sized so ~2.7 cards fit across the content
+       column (viewport minus Streamlit's 16px gutters, minus two 8px gaps),
+       leaving the third card clipped as a "more to the right" cue. */
     [data-testid="stButtonGroup"] button[data-variant="pills"] {
         flex: 0 0 auto !important;
-        white-space: nowrap !important;
+        width: clamp(118px, calc((100vw - 48px) / 2.7), 200px) !important;
+        min-width: 0 !important;
+        max-width: none !important;
+        height: 80px !important;
+        min-height: 80px !important;
+        white-space: normal !important;
         scroll-snap-align: start !important;
         border: 1.5px solid #222 !important;
-        border-radius: 14px !important;
+        border-radius: 16px !important;
         background: #fff !important;
         color: #222 !important;
-        padding: 9px 17px !important;
-        font-size: 0.92rem !important;
+        padding: 6px 11px !important;
+        font-size: 0.84rem !important;
+        align-items: flex-start !important;
+        justify-content: flex-start !important;
+        text-align: left !important;
+        overflow: hidden !important;
     }
     [data-testid="stButtonGroup"] button[data-variant="pills"][aria-checked="true"],
     [data-testid="stButtonGroup"] button[data-variant="pills"][aria-selected="true"] {
         background: #222 !important;
         color: #fff !important;
     }
+    /* Make every wrapper between the button and the text fill the card so the
+       label can wrap and top-align instead of being centred on one line. */
+    [data-testid="stButtonGroup"] button[data-variant="pills"] > div,
+    [data-testid="stButtonGroup"] button[data-variant="pills"] > div > span,
+    [data-testid="stButtonGroup"] button[data-variant="pills"] [data-testid="stMarkdownContainer"] {
+        width: 100% !important;
+        align-items: flex-start !important;
+        justify-content: flex-start !important;
+        text-align: left !important;
+    }
     [data-testid="stButtonGroup"] button[data-variant="pills"] p,
     [data-testid="stButtonGroup"] button[data-variant="pills"] [data-testid="stMarkdownContainer"] {
-        font-size: 0.92rem !important;
+        font-size: 0.84rem !important;
+    }
+    [data-testid="stButtonGroup"] button[data-variant="pills"] p {
+        margin: 0 !important;
+        line-height: 1.2 !important;
+        white-space: normal !important;
+        word-break: keep-all !important;
+        overflow-wrap: anywhere !important;
+        display: -webkit-box !important;
+        -webkit-box-orient: vertical !important;
+        -webkit-line-clamp: 4 !important;
+        overflow: hidden !important;
     }
 
     .small-note {color:#777; font-size:0.95rem;}
@@ -626,24 +659,17 @@ _suggestion_topics = _topics[1:]
 
 topic = st.text_area("토론 주제", value=st.session_state.get("selected_topic", _default_topic), height=100)
 
-# Truncate long topics for pill labels (keep full text for selection)
-def _short(t, maxlen=22):
-    return t if len(t) <= maxlen else t[:maxlen] + "…"
-
-_pill_labels = [_short(t) for t in _suggestion_topics]
+# Full topic text goes on the card; CSS line-clamps it to the card height.
 _selected_pill = st.pills(
     "추천 주제",
-    options=_pill_labels,
+    options=_suggestion_topics,
     default=None,
     label_visibility="collapsed",
     wrap=False,
 )
-if _selected_pill is not None:
-    _idx = _pill_labels.index(_selected_pill)
-    _full_topic = _suggestion_topics[_idx]
-    if st.session_state.get("selected_topic") != _full_topic:
-        st.session_state.selected_topic = _full_topic
-        st.rerun()
+if _selected_pill is not None and st.session_state.get("selected_topic") != _selected_pill:
+    st.session_state.selected_topic = _selected_pill
+    st.rerun()
 
 col_role1, col_role2 = st.columns(2)
 with col_role1:
