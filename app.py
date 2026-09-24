@@ -27,7 +27,7 @@ st.markdown(
     <style>
     .block-container {max-width: 900px; padding-top: 1rem; padding-bottom: 3rem;}
     /* Shrink title for mobile */
-    h1[data-testid="stHeading"] { font-size: 1.3rem !important; white-space: nowrap; }
+    h1[data-testid="stHeading"] { font-size: 1.1rem !important; white-space: nowrap; }
     /* Taller start button */
     div[data-testid="stButton"] > button[kind="primary"] {
         padding-top: 0.85rem !important;
@@ -570,60 +570,23 @@ _suggestion_topics = _topics[1:]
 
 topic = st.text_area("토론 주제", value=st.session_state.get("selected_topic", _default_topic), height=100)
 
-# Handle topic selection from query params
-_picked = st.query_params.get("t")
-if _picked:
-    st.session_state.selected_topic = _picked
-    st.query_params.clear()
-    st.rerun()
+# Truncate long topics for pill labels (keep full text for selection)
+def _short(t, maxlen=22):
+    return t if len(t) <= maxlen else t[:maxlen] + "…"
 
-st.caption("추천 주제를 선택하면 바로 적용됩니다. 좌우로 스와이프하세요.")
-
-# Horizontal scrollable topic carousel
-# Uses window.top.location to navigate the top-level Streamlit page
-_chips = "".join(
-    f'<div class="tc" onclick="pick({i})">{t}</div>'
-    for i, t in enumerate(_suggestion_topics)
+_pill_labels = [_short(t) for t in _suggestion_topics]
+_selected_pill = st.pills(
+    "추천 주제",
+    options=_pill_labels,
+    default=None,
+    label_visibility="collapsed",
 )
-# Build the base URL from Streamlit's known host (strip existing params)
-_carousel_html = f"""
-<style>
-*{{margin:0;padding:0;box-sizing:border-box;}}
-.tc-wrap {{
-    display:flex; overflow-x:auto; gap:10px; padding:4px 2px 12px 2px;
-    scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch;
-    scrollbar-width:none;
-}}
-.tc-wrap::-webkit-scrollbar {{ display:none; }}
-.tc {{
-    flex:0 0 210px; min-height:64px;
-    background:#fff; border:1.5px solid #222; border-radius:14px;
-    padding:12px 14px; font-size:13px; color:#222; line-height:1.45;
-    cursor:pointer; scroll-snap-align:start;
-    transition:transform .15s, box-shadow .15s;
-    display:flex; align-items:center;
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-    -webkit-tap-highlight-color:transparent;
-    user-select:none;
-}}
-.tc:active {{ background:#e8e8e8; }}
-</style>
-<div class="tc-wrap">{_chips}</div>
-<script>
-var topics = {json.dumps(_suggestion_topics)};
-function pick(i) {{
-    try {{
-        var base = window.top.location.origin + window.top.location.pathname;
-        window.top.location.href = base + '?t=' + encodeURIComponent(topics[i]);
-    }} catch(e) {{
-        // Fallback: try parent
-        var base = window.parent.location.origin + window.parent.location.pathname;
-        window.parent.location.href = base + '?t=' + encodeURIComponent(topics[i]);
-    }}
-}}
-</script>
-"""
-st.components.v1.html(_carousel_html, height=115, scrolling=False)
+if _selected_pill is not None:
+    _idx = _pill_labels.index(_selected_pill)
+    _full_topic = _suggestion_topics[_idx]
+    if st.session_state.get("selected_topic") != _full_topic:
+        st.session_state.selected_topic = _full_topic
+        st.rerun()
 
 col_role1, col_role2 = st.columns(2)
 with col_role1:
