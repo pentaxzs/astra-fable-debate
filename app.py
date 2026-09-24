@@ -64,6 +64,7 @@ _T = {
                  else "linear-gradient(135deg, #fff8e1 0%, #fff3e0 100%)"),
     "shadow": "rgba(0,0,0,0.35)" if _DARK else "rgba(0,0,0,0.06)",
     "banner_fg": "#9aa0aa" if _DARK else "#666666",
+    "cta_glow": "rgba(255,75,75,0.28)" if _DARK else "rgba(255,75,75,0.35)",
 }
 
 st.markdown(
@@ -72,12 +73,18 @@ st.markdown(
     <style>
     .block-container {max-width: 900px; padding-top: 1rem; padding-bottom: 3rem;}
 
-    /* Start button: big, bold, prominent */
-    button[kind="primary"] {
-        padding: 1rem 1.2rem !important;
-        font-size: 1.3rem !important;
+    /* Start button. The label lives in a markdown <p> inside the button, so it
+       has to be targeted directly: font-size on the button itself never
+       reaches the text. */
+    [data-testid="stBaseButton-primary"] {
+        padding: 1.1rem 1.2rem !important;
+        box-shadow: 0 4px 14px $cta_glow !important;
+    }
+    [data-testid="stBaseButton-primary"] p {
+        font-size: 1.45rem !important;
         font-weight: 800 !important;
-        letter-spacing: 0.02em !important;
+        letter-spacing: 0.01em !important;
+        line-height: 1.25 !important;
     }
 
     /* Widget labels + inputs: slightly larger for mobile readability */
@@ -823,7 +830,9 @@ _rounds = st.segmented_control(
 num_rounds = _rounds or 3
 st.caption(ROUND_SUMMARIES[num_rounds])
 
-_start_clicked = st.button("💬 토론 시작", type="primary", use_container_width=True)
+_start_clicked = st.button(
+    f"💬 {num_rounds}라운드 토론 시작", type="primary", use_container_width=True
+)
 
 if _start_clicked:
     openai_key = get_api_key(openai_key_ui, "OPENAI_API_KEY")
