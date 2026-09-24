@@ -387,35 +387,27 @@ def run_debate(topic: str, pro_label: str, con_label: str,
 st.title("⚔️ AI Debate Arena")
 st.caption("OpenAI vs Anthropic 모델을 N라운드로 토론시키고 AI Judge가 판정하는 웹앱")
 
-# --- Load saved state from browser cookies ---
-# Cookies are shared between Chrome and home-screen PWA (same domain),
-# unlike localStorage which uses separate storage per browsing context.
+# --- Persistent settings via a single cookie (JSON blob) ---
+# All reads AND writes go through streamlit_js_eval (runs in the main page
+# context). st.components.v1.html creates a sandboxed iframe whose cookies
+# are invisible to the main page — that's why the old approach failed.
 
-_COOKIE_KEYS = ["afd_openai_key", "afd_anthropic_key", "afd_astra_model",
-                "afd_fable_model", "afd_judge_provider", "afd_judge_model"]
+_COOKIE_NAME = "afd_settings"
 
-_COOKIE_READ_JS = """
-(function(){
-    var c = document.cookie;
-    var get = function(n) {
-        var m = c.match(new RegExp('(?:^|; )' + n + '=([^;]*)'));
-        return m ? decodeURIComponent(m[1]) : '';
-    };
-    return JSON.stringify({
-        openai_key: get('afd_openai_key'),
-        anthropic_key: get('afd_anthropic_key'),
-        astra_model: get('afd_astra_model'),
-        fable_model: get('afd_fable_model'),
-        judge_provider: get('afd_judge_provider'),
-        judge_model: get('afd_judge_model')
-    });
-})()
+_COOKIE_READ_JS = f"""
+(function(){{
+    var m = document.cookie.match(new RegExp('(?:^|; ){_COOKIE_NAME}=([^;]*)'));
+    return m ? decodeURIComponent(m[1]) : '{{}}'
+}})()
 """
 
 if "keys_loaded" not in st.session_state:
-    loaded = streamlit_js_eval(js_expressions=_COOKIE_READ_JS, key="load_keys")
+    loaded = streamlit_js_eval(js_expressions=_COOKIE_READ_JS, key="load_cookie")
     if loaded is not None and loaded != 0:
-        data = json.loads(loaded)
+        try:
+            data = json.loads(loaded)
+        except (json.JSONDecodeError, TypeError):
+            data = {}
         st.session_state.saved_openai_key = data.get("openai_key", "")
         st.session_state.saved_anthropic_key = data.get("anthropic_key", "")
         st.session_state.saved_astra_model = data.get("astra_model", "")
@@ -425,30 +417,38 @@ if "keys_loaded" not in st.session_state:
         st.session_state.keys_loaded = True
         st.rerun()
 
+# If a pending save was requested, write the cookie now via streamlit_js_eval
+if st.session_state.get("_pending_save"):
+    blob = json.dumps(st.session_state["_pending_save"])
+    save_js = (
+        f'document.cookie="{_COOKIE_NAME}="'
+        f'+encodeURIComponent({json.dumps(blob)})'
+        f'+";max-age=31536000;path=/;SameSite=Lax"'
+    )
+    streamlit_js_eval(js_expressions=save_js, key="write_cookie")
+    del st.session_state["_pending_save"]
+
 # Determine if API keys are already saved (for auto-collapse)
 _has_saved_keys = bool(
     st.session_state.get("saved_openai_key") or st.session_state.get("saved_anthropic_key")
 )
 
 
-def _save_cookie(key: str, value: str, days: int = 365):
-    """Save a value to a browser cookie (persists across Chrome & home-screen PWA)."""
-    escaped = json.dumps(value)
-    st.components.v1.html(
-        f'<script>'
-        f'document.cookie="{key}="+encodeURIComponent({escaped})'
-        f'+";max-age={days * 86400};path=/;SameSite=Lax";'
-        f'</script>',
-        height=0,
-    )
+def _schedule_cookie_save():
+    """Collect all saved_* values and schedule a cookie write on next rerun."""
+    st.session_state["_pending_save"] = {
+        "openai_key": st.session_state.get("saved_openai_key", ""),
+        "anthropic_key": st.session_state.get("saved_anthropic_key", ""),
+        "astra_model": st.session_state.get("saved_astra_model", ""),
+        "fable_model": st.session_state.get("saved_fable_model", ""),
+        "judge_provider": st.session_state.get("saved_judge_provider", ""),
+        "judge_model": st.session_state.get("saved_judge_model", ""),
+    }
 
 
-def _delete_cookie(key: str):
-    """Delete a browser cookie."""
-    st.components.v1.html(
-        f'<script>document.cookie="{key}=;max-age=0;path=/;SameSite=Lax";</script>',
-        height=0,
-    )
+def _schedule_cookie_delete():
+    """Schedule a cookie deletion on next rerun."""
+    st.session_state["_pending_save"] = {}
 
 
 with st.sidebar:
@@ -469,18 +469,16 @@ with st.sidebar:
         btn_col1, btn_col2 = st.columns(2)
         with btn_col1:
             if st.button("키 저장", use_container_width=True):
-                _save_cookie("afd_openai_key", openai_key_ui)
-                _save_cookie("afd_anthropic_key", anthropic_key_ui)
                 st.session_state.saved_openai_key = openai_key_ui
                 st.session_state.saved_anthropic_key = anthropic_key_ui
-                st.toast("API Key가 브라우저에 저장되었습니다.")
+                _schedule_cookie_save()
+                st.toast("API Key가 저장되었습니다.")
                 st.rerun()
         with btn_col2:
             if st.button("키 삭제", use_container_width=True):
-                _delete_cookie("afd_openai_key")
-                _delete_cookie("afd_anthropic_key")
                 st.session_state.saved_openai_key = ""
                 st.session_state.saved_anthropic_key = ""
+                _schedule_cookie_delete()
                 st.toast("저장된 API Key가 삭제되었습니다.")
                 st.rerun()
         st.caption("API Key는 브라우저 쿠키에 저장됩니다 (홈화면 앱에서도 유지).")
@@ -536,15 +534,13 @@ with st.sidebar:
         _astra_final = (astra_model_custom.strip() or astra_model).strip()
         _fable_final = (fable_model_custom.strip() or fable_model).strip()
         _judge_final = (judge_model_custom.strip() or judge_model).strip()
-        _save_cookie("afd_astra_model", _astra_final)
-        _save_cookie("afd_fable_model", _fable_final)
-        _save_cookie("afd_judge_provider", judge_provider)
-        _save_cookie("afd_judge_model", _judge_final)
         st.session_state.saved_astra_model = _astra_final
         st.session_state.saved_fable_model = _fable_final
         st.session_state.saved_judge_provider = judge_provider
         st.session_state.saved_judge_model = _judge_final
+        _schedule_cookie_save()
         st.toast("모델 설정이 저장되었습니다.")
+        st.rerun()
 
 left, right = st.columns([2, 1])
 with left:
