@@ -4,6 +4,7 @@ import os
 import random
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
+from string import Template
 
 import markdown
 import streamlit as st
@@ -17,13 +18,56 @@ def md_to_html(text: str) -> str:
     return markdown.markdown(text, extensions=["tables", "fenced_code"])
 
 
+REPO_URL = "https://github.com/pentaxzs/astra-fable-debate"
+
+# The fork/star badge on Streamlit Community Cloud is hosting chrome, not
+# something app code can render. What the app does control is the ⋮ menu, so
+# point it at the repo.
 st.set_page_config(
     page_title="Astra × Fable Debate",
     page_icon="⚔️",
     layout="wide",
+    menu_items={
+        "Get Help": REPO_URL,
+        "Report a bug": f"{REPO_URL}/issues/new",
+        "About": (
+            "**AI Debate Arena** — OpenAI와 Anthropic 모델을 N라운드로 토론시키고 "
+            f"AI Judge가 판정합니다.\n\n[GitHub에서 소스 보기]({REPO_URL})"
+        ),
+    },
 )
 
+# Colours that have to flip with the theme. st.context.theme.type reports the
+# theme actually resolved in the browser, so this follows both the OS setting
+# and an explicit pick in Streamlit's settings menu.
+_DARK = st.context.theme.type == "dark"
+_T = {
+    # topic cards
+    "card_bg": "#1a1d24" if _DARK else "#ffffff",
+    "card_fg": "#e6e6e6" if _DARK else "#222222",
+    "card_line": "#3d434f" if _DARK else "#222222",
+    "card_sel_bg": "#e6e6e6" if _DARK else "#222222",
+    "card_sel_fg": "#16181d" if _DARK else "#ffffff",
+    # debate transcript
+    "note_fg": "#9aa0aa" if _DARK else "#777777",
+    "divider_bg": "#0e1117" if _DARK else "#ffffff",
+    "divider_fg": "#aab0ba" if _DARK else "#555555",
+    "divider_line": "#454b57" if _DARK else "#bbbbbb",
+    "card_text": "#e4e6ea" if _DARK else "#1a1a1a",
+    "card_heading": "#f2f4f7" if _DARK else "#111111",
+    "card_strong": "#ffffff" if _DARK else "#000000",
+    "astra_bg": ("linear-gradient(135deg, #16251a 0%, #1a2b1d 100%)" if _DARK
+                 else "linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%)"),
+    "fable_bg": ("linear-gradient(135deg, #1e1a2e 0%, #1c1e33 100%)" if _DARK
+                 else "linear-gradient(135deg, #ede7f6 0%, #e8eaf6 100%)"),
+    "judge_bg": ("linear-gradient(135deg, #2a2417 0%, #2b2519 100%)" if _DARK
+                 else "linear-gradient(135deg, #fff8e1 0%, #fff3e0 100%)"),
+    "shadow": "rgba(0,0,0,0.35)" if _DARK else "rgba(0,0,0,0.06)",
+    "banner_fg": "#9aa0aa" if _DARK else "#666666",
+}
+
 st.markdown(
+    Template(
     """
     <style>
     .block-container {max-width: 900px; padding-top: 1rem; padding-bottom: 3rem;}
@@ -78,10 +122,10 @@ st.markdown(
         min-height: 62px !important;
         white-space: normal !important;
         scroll-snap-align: start !important;
-        border: 1.5px solid #222 !important;
+        border: 1.5px solid $card_line !important;
         border-radius: 16px !important;
-        background: #fff !important;
-        color: #222 !important;
+        background: $card_bg !important;
+        color: $card_fg !important;
         padding: 4px 10px !important;
         font-size: 0.91rem !important;
         align-items: center !important;
@@ -91,8 +135,8 @@ st.markdown(
     }
     [data-testid="stButtonGroup"] button[data-variant="pills"][aria-checked="true"],
     [data-testid="stButtonGroup"] button[data-variant="pills"][aria-selected="true"] {
-        background: #222 !important;
-        color: #fff !important;
+        background: $card_sel_bg !important;
+        color: $card_sel_fg !important;
     }
     /* Make every wrapper between the button and the text fill the card so the
        label can wrap and top-align instead of being centred on one line. */
@@ -120,7 +164,7 @@ st.markdown(
         overflow: hidden !important;
     }
 
-    .small-note {color:#777; font-size:0.95rem;}
+    .small-note {color:$note_fg; font-size:0.95rem;}
 
     .debate-card {
         border-radius: 12px;
@@ -128,30 +172,30 @@ st.markdown(
         margin-bottom: 1rem;
         line-height: 1.7;
         font-size: 0.95rem;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-        color: #1a1a1a !important;
+        box-shadow: 0 2px 8px $shadow;
+        color: $card_text !important;
     }
     .debate-card h1, .debate-card h2, .debate-card h3 {
         font-size: 1.05rem !important;
         margin-top: 0.8rem; margin-bottom: 0.4rem;
-        color: #111 !important;
+        color: $card_heading !important;
     }
     .debate-card h4, .debate-card h5, .debate-card h6 {
         font-size: 0.95rem !important;
         margin-top: 0.6rem; margin-bottom: 0.3rem;
-        color: #111 !important;
+        color: $card_heading !important;
     }
-    .debate-card p { margin-bottom: 0.6rem; color: #1a1a1a !important; }
-    .debate-card li { color: #1a1a1a !important; }
-    .debate-card strong { color: #000 !important; }
+    .debate-card p { margin-bottom: 0.6rem; color: $card_text !important; }
+    .debate-card li { color: $card_text !important; }
+    .debate-card strong { color: $card_strong !important; }
 
     .card-astra {
-        background: linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%);
+        background: $astra_bg;
         border-left: 5px solid #43a047;
         margin-right: 3rem;
     }
     .card-fable {
-        background: linear-gradient(135deg, #ede7f6 0%, #e8eaf6 100%);
+        background: $fable_bg;
         border-right: 5px solid #5e35b1;
         border-left: none;
         margin-left: 3rem;
@@ -179,17 +223,17 @@ st.markdown(
         position: absolute;
         top: 50%;
         left: 0; right: 0;
-        border-top: 2px dashed #bbb;
+        border-top: 2px dashed $divider_line;
     }
     .round-divider span {
-        background: #fff;
+        background: $divider_bg;
         padding: 0.3rem 1.2rem;
         font-weight: 700;
         font-size: 1rem;
-        color: #555;
+        color: $divider_fg;
         position: relative;
         border-radius: 20px;
-        border: 2px solid #bbb;
+        border: 2px solid $divider_line;
     }
 
     .arrow-down {
@@ -200,7 +244,7 @@ st.markdown(
     }
 
     .card-judge {
-        background: linear-gradient(135deg, #fff8e1 0%, #fff3e0 100%);
+        background: $judge_bg;
         border-left: 5px solid #f9a825;
         border-right: 5px solid #f9a825;
     }
@@ -219,7 +263,8 @@ st.markdown(
     .verdict-draw { background: #757575; color: #fff; }
 
     </style>
-    """,
+    """
+    ).substitute(_T),
     unsafe_allow_html=True,
 )
 
@@ -838,7 +883,7 @@ if _start_clicked:
 
         # Model info banner
         st.markdown(
-            f'<div style="text-align:center;color:#666;font-size:0.85rem;margin-bottom:1rem;">'
+            f'<div style="text-align:center;color:{_T["banner_fg"]};font-size:0.85rem;margin-bottom:1rem;">'
             f'OpenAI: <b>{astra_display}</b> &nbsp;vs&nbsp; Anthropic: <b>{fable_display}</b> &nbsp;|&nbsp; Judge: <b>{judge_actual_model}</b>'
             f'</div>',
             unsafe_allow_html=True,
