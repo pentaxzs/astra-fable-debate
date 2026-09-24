@@ -124,20 +124,36 @@ st.markdown(
     .verdict-fable { background: #5e35b1; color: #fff; }
     .verdict-draw { background: #757575; color: #fff; }
 
-    .topic-card-btn button {
-        background: #f5f5f5 !important;
-        border: 1px solid #ddd !important;
-        border-radius: 10px !important;
-        padding: 0.6rem 0.8rem !important;
-        font-size: 0.85rem !important;
-        color: #333 !important;
-        text-align: left !important;
-        line-height: 1.4 !important;
-        min-height: 3.2rem !important;
+    .topic-scroll {
+        display: flex;
+        overflow-x: auto;
+        gap: 0.7rem;
+        padding: 0.5rem 0 0.8rem 0;
+        scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
     }
-    .topic-card-btn button:hover {
-        background: #e3f2fd !important;
-        border-color: #90caf9 !important;
+    .topic-scroll::-webkit-scrollbar { display: none; }
+    .topic-chip {
+        flex: 0 0 auto;
+        width: 220px;
+        min-height: 70px;
+        background: #2a2a2a;
+        border-radius: 14px;
+        padding: 0.8rem 1rem;
+        font-size: 0.82rem;
+        color: #eee !important;
+        line-height: 1.45;
+        cursor: pointer;
+        scroll-snap-align: start;
+        transition: transform 0.15s, box-shadow 0.15s;
+        display: flex;
+        align-items: center;
+    }
+    .topic-chip:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+        background: #3a3a3a;
     }
     </style>
     """,
@@ -577,16 +593,35 @@ _suggestion_topics = _topics[1:]
 
 topic = st.text_area("토론 주제", value=st.session_state.get("selected_topic", _default_topic), height=100)
 
-st.caption("추천 주제를 선택하면 바로 적용됩니다.")
-_cols = st.columns(3)
+st.caption("추천 주제를 선택하면 바로 적용됩니다. 좌우로 스와이프하세요.")
+
+# Build horizontal scrollable topic chips as a single HTML component
+_chips_html = ""
 for i, t in enumerate(_suggestion_topics):
-    with _cols[i % 3]:
-        with st.container():
-            st.markdown('<div class="topic-card-btn">', unsafe_allow_html=True)
-            if st.button(t, key=f"topic_{i}", use_container_width=True):
-                st.session_state.selected_topic = t
-                st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
+    _escaped = t.replace('"', '&quot;').replace("'", "\\'")
+    _chips_html += f'<div class="topic-chip" onclick="selectTopic({i})">{t}</div>'
+
+_topic_carousel_html = f"""
+<div class="topic-scroll">{_chips_html}</div>
+<script>
+function selectTopic(idx) {{
+    var topics = {json.dumps(_suggestion_topics)};
+    var topic = topics[idx];
+    // Update the Streamlit text_area via query params and reload
+    var url = new URL(window.parent.location.href);
+    url.searchParams.set('pick_topic', topic);
+    window.parent.location.href = url.toString();
+}}
+</script>
+"""
+st.markdown(_topic_carousel_html, unsafe_allow_html=True)
+
+# Handle topic selection from query params
+_picked = st.query_params.get("pick_topic")
+if _picked:
+    st.session_state.selected_topic = _picked
+    st.query_params.clear()
+    st.rerun()
 
 col_role1, col_role2 = st.columns(2)
 with col_role1:
