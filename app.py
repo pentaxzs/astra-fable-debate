@@ -26,24 +26,44 @@ st.markdown(
     """
     <style>
     .block-container {max-width: 900px; padding-top: 1rem; padding-bottom: 3rem;}
-    /* Taller start button */
-    div[data-testid="stButton"] > button[kind="primary"] {
-        padding-top: 0.9rem !important;
-        padding-bottom: 0.9rem !important;
-        font-size: 1.1rem !important;
-        font-weight: 700 !important;
+
+    /* Start button: big, bold, prominent */
+    button[kind="primary"] {
+        padding: 1rem 1.2rem !important;
+        font-size: 1.2rem !important;
+        font-weight: 800 !important;
+        letter-spacing: 0.02em !important;
     }
-    /* Pills horizontal scroll */
-    div[data-testid="stPills"] > div {
+
+    /* Pills → horizontal scroll card strip */
+    [data-testid="stPills"] [role="tablist"],
+    [data-testid="stPills"] > div,
+    [data-testid="stPills"] > div > div {
         flex-wrap: nowrap !important;
         overflow-x: auto !important;
-        scrollbar-width: none;
-        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none !important;
+        -webkit-overflow-scrolling: touch !important;
+        gap: 8px !important;
     }
-    div[data-testid="stPills"] > div::-webkit-scrollbar { display: none; }
-    div[data-testid="stPills"] > div > button {
+    [data-testid="stPills"] [role="tablist"]::-webkit-scrollbar,
+    [data-testid="stPills"] > div::-webkit-scrollbar,
+    [data-testid="stPills"] > div > div::-webkit-scrollbar { display: none !important; }
+
+    [data-testid="stPills"] button,
+    [data-testid="stPills"] [role="tab"] {
         flex: 0 0 auto !important;
         white-space: nowrap !important;
+        border: 1.5px solid #222 !important;
+        border-radius: 14px !important;
+        background: #fff !important;
+        color: #222 !important;
+        padding: 8px 16px !important;
+        font-size: 0.82rem !important;
+    }
+    [data-testid="stPills"] button[aria-selected="true"],
+    [data-testid="stPills"] [role="tab"][aria-selected="true"] {
+        background: #222 !important;
+        color: #fff !important;
     }
     .small-note {color:#777; font-size:0.9rem;}
 
@@ -418,7 +438,7 @@ def run_debate(topic: str, pro_label: str, con_label: str,
 
 
 st.markdown(
-    '<h1 style="font-size:1.4rem;margin:0 0 0.2rem 0;white-space:nowrap;">⚔️ AI Debate Arena</h1>'
+    '<h1 style="font-size:1.5rem;line-height:1.8;margin:0 0 0.3rem 0;white-space:nowrap;overflow:visible;">⚔️ AI Debate Arena</h1>'
     '<p style="color:#888;font-size:0.8rem;margin:0 0 0.8rem 0;">OpenAI vs Anthropic 모델을 N라운드로 토론시키고 AI Judge가 판정하는 웹앱</p>',
     unsafe_allow_html=True,
 )
