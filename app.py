@@ -387,14 +387,33 @@ def run_debate(topic: str, pro_label: str, con_label: str,
 st.title("⚔️ AI Debate Arena")
 st.caption("OpenAI vs Anthropic 모델을 N라운드로 토론시키고 AI Judge가 판정하는 웹앱")
 
-# --- Load saved state from browser localStorage ---
-_LS_KEYS = "afd_openai_key afd_anthropic_key afd_astra_model afd_fable_model afd_judge_provider afd_judge_model".split()
+# --- Load saved state from browser cookies ---
+# Cookies are shared between Chrome and home-screen PWA (same domain),
+# unlike localStorage which uses separate storage per browsing context.
+
+_COOKIE_KEYS = ["afd_openai_key", "afd_anthropic_key", "afd_astra_model",
+                "afd_fable_model", "afd_judge_provider", "afd_judge_model"]
+
+_COOKIE_READ_JS = """
+(function(){
+    var c = document.cookie;
+    var get = function(n) {
+        var m = c.match(new RegExp('(?:^|; )' + n + '=([^;]*)'));
+        return m ? decodeURIComponent(m[1]) : '';
+    };
+    return JSON.stringify({
+        openai_key: get('afd_openai_key'),
+        anthropic_key: get('afd_anthropic_key'),
+        astra_model: get('afd_astra_model'),
+        fable_model: get('afd_fable_model'),
+        judge_provider: get('afd_judge_provider'),
+        judge_model: get('afd_judge_model')
+    });
+})()
+"""
 
 if "keys_loaded" not in st.session_state:
-    js_expr = "JSON.stringify({" + ",".join(
-        f'{k.split("afd_")[1]}:localStorage.getItem("{k}")||""' for k in _LS_KEYS
-    ) + "})"
-    loaded = streamlit_js_eval(js_expressions=js_expr, key="load_keys")
+    loaded = streamlit_js_eval(js_expressions=_COOKIE_READ_JS, key="load_keys")
     if loaded is not None and loaded != 0:
         data = json.loads(loaded)
         st.session_state.saved_openai_key = data.get("openai_key", "")
@@ -412,10 +431,22 @@ _has_saved_keys = bool(
 )
 
 
-def _save_to_ls(key: str, value: str):
-    """Save a single value to localStorage."""
+def _save_cookie(key: str, value: str, days: int = 365):
+    """Save a value to a browser cookie (persists across Chrome & home-screen PWA)."""
+    escaped = json.dumps(value)
     st.components.v1.html(
-        f'<script>localStorage.setItem("{key}",{json.dumps(value)});</script>',
+        f'<script>'
+        f'document.cookie="{key}="+encodeURIComponent({escaped})'
+        f'+";max-age={days * 86400};path=/;SameSite=Lax";'
+        f'</script>',
+        height=0,
+    )
+
+
+def _delete_cookie(key: str):
+    """Delete a browser cookie."""
+    st.components.v1.html(
+        f'<script>document.cookie="{key}=;max-age=0;path=/;SameSite=Lax";</script>',
         height=0,
     )
 
@@ -438,23 +469,21 @@ with st.sidebar:
         btn_col1, btn_col2 = st.columns(2)
         with btn_col1:
             if st.button("키 저장", use_container_width=True):
-                _save_to_ls("afd_openai_key", openai_key_ui)
-                _save_to_ls("afd_anthropic_key", anthropic_key_ui)
+                _save_cookie("afd_openai_key", openai_key_ui)
+                _save_cookie("afd_anthropic_key", anthropic_key_ui)
                 st.session_state.saved_openai_key = openai_key_ui
                 st.session_state.saved_anthropic_key = anthropic_key_ui
                 st.toast("API Key가 브라우저에 저장되었습니다.")
                 st.rerun()
         with btn_col2:
             if st.button("키 삭제", use_container_width=True):
-                st.components.v1.html(
-                    '<script>localStorage.removeItem("afd_openai_key");localStorage.removeItem("afd_anthropic_key");</script>',
-                    height=0,
-                )
+                _delete_cookie("afd_openai_key")
+                _delete_cookie("afd_anthropic_key")
                 st.session_state.saved_openai_key = ""
                 st.session_state.saved_anthropic_key = ""
                 st.toast("저장된 API Key가 삭제되었습니다.")
                 st.rerun()
-        st.caption("API Key는 브라우저 localStorage에만 저장됩니다.")
+        st.caption("API Key는 브라우저 쿠키에 저장됩니다 (홈화면 앱에서도 유지).")
 
     st.divider()
     st.header("모델 설정")
@@ -507,10 +536,10 @@ with st.sidebar:
         _astra_final = (astra_model_custom.strip() or astra_model).strip()
         _fable_final = (fable_model_custom.strip() or fable_model).strip()
         _judge_final = (judge_model_custom.strip() or judge_model).strip()
-        _save_to_ls("afd_astra_model", _astra_final)
-        _save_to_ls("afd_fable_model", _fable_final)
-        _save_to_ls("afd_judge_provider", judge_provider)
-        _save_to_ls("afd_judge_model", _judge_final)
+        _save_cookie("afd_astra_model", _astra_final)
+        _save_cookie("afd_fable_model", _fable_final)
+        _save_cookie("afd_judge_provider", judge_provider)
+        _save_cookie("afd_judge_model", _judge_final)
         st.session_state.saved_astra_model = _astra_final
         st.session_state.saved_fable_model = _fable_final
         st.session_state.saved_judge_provider = judge_provider
