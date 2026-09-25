@@ -892,79 +892,21 @@ if _start_clicked:
             )
             status.update(label="토론 및 판정 완료", state="complete", expanded=False)
 
-        total_calls = num_rounds * 2 + 1
-        st.success(f"토론이 완료되었습니다. (총 {num_rounds}라운드 + Judge 판정, API 호출 {total_calls}회)")
-
-        # Model info banner
-        st.markdown(
-            f'<div style="text-align:center;color:{_T["banner_fg"]};font-size:0.85rem;margin-bottom:1rem;">'
-            f'OpenAI: <b>{astra_display}</b> &nbsp;vs&nbsp; Anthropic: <b>{fable_display}</b> &nbsp;|&nbsp; Judge: <b>{judge_actual_model}</b>'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
-
-        for r in range(1, num_rounds + 1):
-            label = ROUND_LABELS[r]
-            icon = {1: "\u2694\ufe0f", 2: "\U0001f50d", 3: "\U0001f3c6"}.get(r, "")
-            st.markdown(
-                f'<div class="round-divider"><span>{icon} ROUND {r} &mdash; {label}</span></div>',
-                unsafe_allow_html=True,
-            )
-
-            # Astra speaks
-            render_debate_card_html(
-                f"{astra_display} ({pro_label.strip() or '찬성 측'})",
-                "astra",
-                results[f"astra_{r}"],
-            )
-
-            # Arrow indicating response
-            st.markdown('<div class="arrow-down">\u2b07\ufe0f</div>', unsafe_allow_html=True)
-
-            # Fable responds
-            render_debate_card_html(
-                f"{fable_display} ({con_label.strip() or '반대 측'})",
-                "fable",
-                results[f"fable_{r}"],
-            )
-
-        # --- Judge Verdict ---
-        _pro = pro_label.strip() or "찬성 측"
-        _con = con_label.strip() or "반대 측"
-        verdict = parse_verdict(judge_result, _pro, _con)
-        verdict_labels = {
-            "pro": (f"{_pro} 승 ({astra_display})", "verdict-astra"),
-            "con": (f"{_con} 승 ({fable_display})", "verdict-fable"),
-            "draw": ("무승부", "verdict-draw"),
+        # Park the whole result in session_state. Everything below renders from
+        # here, not from locals, so a rerun (download click, widget change)
+        # redraws the transcript instead of dropping it.
+        st.session_state["debate"] = {
+            "topic": topic.strip(),
+            "pro_label": pro_label.strip() or "찬성 측",
+            "con_label": con_label.strip() or "반대 측",
+            "astra_model": astra_display,
+            "fable_model": fable_display,
+            "judge_model": judge_actual_model,
+            "results": results,
+            "judge_result": judge_result,
+            "num_rounds": num_rounds,
         }
-        verdict_text, verdict_cls = verdict_labels[verdict]
-
-        st.markdown(
-            '<div class="round-divider"><span>\u2696\ufe0f JUDGE \u2014 \ud310\uc815</span></div>',
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            f'<div class="verdict-box {verdict_cls}">{verdict_text}</div>',
-            unsafe_allow_html=True,
-        )
-        render_debate_card_html(
-            f"Judge \u00b7 {judge_actual_model}",
-            "judge",
-            judge_result,
-        )
-
-        # --- Transcript with Judge ---
-        transcript = build_transcript(topic.strip(), pro_label, con_label, results, num_rounds,
-                                      openai_name=astra_display, anthropic_name=fable_display)
-        transcript += f"\n## Judge 판정 ({judge_actual_model})\n\n{judge_result}\n"
-        st.download_button(
-            "토론 결과 Markdown으로 저장",
-            data=transcript,
-            file_name="astra_fable_debate.md",
-            mime="text/markdown",
-            use_container_width=True,
-        )
-
+        st.session_state["debate_just_finished"] = True
     except Exception as exc:
         exc_msg = str(exc).lower()
         if "not_found" in exc_msg or "404" in exc_msg:
@@ -989,3 +931,79 @@ if _start_clicked:
         else:
             st.error("API 호출 중 오류가 발생했습니다.")
             st.exception(exc)
+
+
+# --- Render the most recent debate -------------------------------------------
+# Driven by session_state, so it survives every rerun: clicking the download
+# button, changing a sidebar setting, picking another topic. Previously these
+# were locals inside `if _start_clicked:`, and a button reads True only on the
+# run right after its click, so the first rerun wiped the whole transcript.
+_debate = st.session_state.get("debate")
+if _debate:
+    _rounds_done = _debate["num_rounds"]
+    _results = _debate["results"]
+    _astra = _debate["astra_model"]
+    _fable = _debate["fable_model"]
+    _judge_model_used = _debate["judge_model"]
+    _judge_text = _debate["judge_result"]
+    _pro = _debate["pro_label"]
+    _con = _debate["con_label"]
+
+    if st.session_state.pop("debate_just_finished", False):
+        _total_calls = _rounds_done * 2 + 1
+        st.success(
+            f"토론이 완료되었습니다. (총 {_rounds_done}라운드 + Judge 판정, "
+            f"API 호출 {_total_calls}회)"
+        )
+
+    st.markdown(
+        f'<div style="text-align:center;color:{_T["banner_fg"]};font-size:0.85rem;margin-bottom:1rem;">'
+        f'OpenAI: <b>{_astra}</b> &nbsp;vs&nbsp; Anthropic: <b>{_fable}</b>'
+        f' &nbsp;|&nbsp; Judge: <b>{_judge_model_used}</b>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    for r in range(1, _rounds_done + 1):
+        label = ROUND_LABELS[r]
+        icon = {1: "\u2694\ufe0f", 2: "\U0001f50d", 3: "\U0001f3c6"}.get(r, "")
+        st.markdown(
+            f'<div class="round-divider"><span>{icon} ROUND {r} &mdash; {label}</span></div>',
+            unsafe_allow_html=True,
+        )
+        render_debate_card_html(f"{_astra} ({_pro})", "astra", _results[f"astra_{r}"])
+        st.markdown('<div class="arrow-down">\u2b07\ufe0f</div>', unsafe_allow_html=True)
+        render_debate_card_html(f"{_fable} ({_con})", "fable", _results[f"fable_{r}"])
+
+    # --- Judge Verdict ---
+    verdict = parse_verdict(_judge_text, _pro, _con)
+    verdict_labels = {
+        "pro": (f"{_pro} 승 ({_astra})", "verdict-astra"),
+        "con": (f"{_con} 승 ({_fable})", "verdict-fable"),
+        "draw": ("무승부", "verdict-draw"),
+    }
+    verdict_text, verdict_cls = verdict_labels[verdict]
+
+    st.markdown(
+        '<div class="round-divider"><span>\u2696\ufe0f JUDGE \u2014 \ud310\uc815</span></div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f'<div class="verdict-box {verdict_cls}">{verdict_text}</div>',
+        unsafe_allow_html=True,
+    )
+    render_debate_card_html(f"Judge \u00b7 {_judge_model_used}", "judge", _judge_text)
+
+    # --- Transcript with Judge ---
+    transcript = build_transcript(
+        _debate["topic"], _pro, _con, _results, _rounds_done,
+        openai_name=_astra, anthropic_name=_fable,
+    )
+    transcript += f"\n## Judge 판정 ({_judge_model_used})\n\n{_judge_text}\n"
+    st.download_button(
+        "토론 결과 Markdown으로 저장",
+        data=transcript,
+        file_name="astra_fable_debate.md",
+        mime="text/markdown",
+        use_container_width=True,
+    )
